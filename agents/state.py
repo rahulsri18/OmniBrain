@@ -1,4 +1,5 @@
-from typing import TypedDict, List, Optional, Dict, Any
+from typing import TypedDict, List, Optional, Dict, Any, Annotated
+import operator
 
 
 class GraphState(TypedDict):
