@@ -11,10 +11,10 @@ class GraphState(TypedDict):
     question: str
 
     # Conversation history
-    chat_history: List[Dict[str, str]]
+    chat_history: Annotated[List[Dict[str, str]], operator.add]
 
     # Retrieved context/documents
-    context: List[str]
+    context: Annotated[List[str], operator.add]
 
     # Final LLM response
     response: str
