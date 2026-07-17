@@ -14,6 +14,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def home():
-    return {"message": "Welcome to OmniBrain Backend!"}
+    # Welcome to OmniBrain Backend!
+    return {"message": "Server is running"}
