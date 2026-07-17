@@ -6,7 +6,6 @@ class GraphState(TypedDict):
     """
     Shared state passed between LangGraph nodes.
     """
-
     # User input
     question: str
 
