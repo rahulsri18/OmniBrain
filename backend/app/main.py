@@ -1,12 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+# 👈 अपनी नई सर्विस को इम्पोर्ट करो
+from app.services.ingestion_service import IngestionService  
 
 app = FastAPI(
     title="OmniBrain Backend",
     version="0.1.0"
 )
 
-# CORS को वापस सही तरीके से सेट करें (वरना फ्रंटएंड कनेक्ट नहीं होगा)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,16 +16,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# सर्विस क्लास को इनिशियलाइज़ किया
+ingestion_service = IngestionService()
+
 
 @app.get("/")
 def home():
-    # Welcome to OmniBrain Backend!
     return {"message": "Server is running"}
 
 
 @app.post("/api/v1/upload")
 async def upload_file(file: UploadFile = File(...)):
-    # डबल वैलिडेशन: Content Type और File Extension दोनों चेक करें
+    # डबल वैलिडेशन (M5 का कोड)
     is_pdf_mime = file.content_type == "application/pdf"
     is_pdf_ext = file.filename.lower().endswith(".pdf")
 
@@ -34,8 +37,10 @@ async def upload_file(file: UploadFile = File(...)):
             detail="Only PDF files are allowed."
         )
 
-    return {
-        "filename": file.filename,
-        "content_type": file.content_type,
-        "message": "PDF uploaded successfully."
-    }
+    # 👈 तुम्हारी सर्विस पाइपलाइन यहाँ ट्रिगर होगी
+    result = await ingestion_service.process_pipeline(file)
+    
+    if result["status"] == "failed":
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
