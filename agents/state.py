@@ -10,16 +10,16 @@ class GraphState(TypedDict):
     # User input
     question: str
 
-    # Conversation history
+    # Conversation history (Append-only)
     chat_history: Annotated[List[Dict[str, str]], operator.add]
 
-    # Retrieved context/documents
+    # Retrieved context/documents (Append-only)
     context: Annotated[List[str], operator.add]
 
     # Final LLM response
     response: str
 
-    # Selected route/node
+    # Selected route/node (Supervisor Node के लिए ज़रूरी)
     route: Optional[str]
 
     # Error message (if any)
