@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 # 👈 अपनी नई सर्विस को इम्पोर्ट करो
 from app.services.ingestion_service import IngestionService  
@@ -26,7 +26,10 @@ def home():
 
 
 @app.post("/api/v1/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
     # डबल वैलिडेशन (M5 का कोड)
     is_pdf_mime = file.content_type == "application/pdf"
     is_pdf_ext = file.filename.lower().endswith(".pdf")
@@ -38,9 +41,12 @@ async def upload_file(file: UploadFile = File(...)):
         )
 
     # 👈 तुम्हारी सर्विस पाइपलाइन यहाँ ट्रिगर होगी
-    result = await ingestion_service.process_pipeline(file)
-    
-    if result["status"] == "failed":
-        raise HTTPException(status_code=500, detail=result["error"])
+    background_tasks.add_task(
+    ingestion_service.process_pipeline,
+    file
+)
 
-    return result
+    return {
+    "status": "accepted",
+    "message": "File uploaded successfully. Ingestion pipeline started in background."
+}
