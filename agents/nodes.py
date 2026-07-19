@@ -1,4 +1,5 @@
 from agents.state import GraphState
+from agents.retriever import retriever_tool
 
 
 def router_node(state: GraphState) -> GraphState:
@@ -12,6 +13,13 @@ def retrieve_node(state: GraphState) -> GraphState:
     """
     Retrieve relevant context/documents.
     """
+
+    query = state["question"]
+
+    documents = retriever_tool(query)
+
+    state["context"] = documents
+
     return state
 
 
