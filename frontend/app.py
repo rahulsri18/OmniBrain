@@ -1,28 +1,41 @@
+# frontend/app.py
+import os
 import streamlit as st
-def load_css():
-    with open("frontend/assets/css/style.css") as f:
-        st.markdown(
-            f"<style>{f.read()}</style>",
-            unsafe_allow_html=True
-        )
 
-from components.sidebar import render_sidebar
-from components.header import render_header
-from components.uploader import render_uploader
-
+# 🚀 नियम #1: st.set_page_config सबसे ऊपर होना ही चाहिए!
 st.set_page_config(
-    load_css()
     page_title="OmniBrain",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Sidebar
+def load_css():
+    """डायनेमिक पाथ हैंडलिंग ताकि कहीं से भी रन करने पर CSS लोड हो जाए"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    css_path = os.path.join(current_dir, "assets", "css", "style.css")
+    
+    if os.path.exists(css_path):
+        with open(css_path) as f:
+            st.markdown(
+                f"<style>{f.read()}</style>",
+                unsafe_allow_html=True
+            )
+
+# CSS को पेज कॉन्फिगरेशन के बाद लोड करें
+load_css()
+
+# रिलेटिव इम्पोर्ट्स (ताकि पाथ का कोई लोचा न रहे)
+from components.sidebar import render_sidebar
+from components.header import render_header
+from components.uploader import render_uploader
+
+# Sidebar Render
 render_sidebar()
 
-# Main Page
+# Main Page Render
 render_header()
+
 st.info(
     "👋 Welcome! Upload a PDF document to start chatting with OmniBrain."
 )
