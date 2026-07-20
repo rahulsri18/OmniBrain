@@ -5,6 +5,8 @@ Optimized utility module for splitting extracted PDF text into
 overlapping chunks for embedding generation and retrieval.
 """
 
+import os
+import os
 from typing import List, Dict
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -18,8 +20,8 @@ class TextChunker:
 
     def __init__(
         self,
-        chunk_size: int = 800,
-        chunk_overlap: int = 120,
+        chunk_size: int = None,
+        chunk_overlap: int = None,
         min_chunk_length: int = 30,
     ):
         """
@@ -28,6 +30,9 @@ class TextChunker:
             chunk_overlap: Number of overlapping characters.
             min_chunk_length: Ignore chunks smaller than this.
         """
+        self.chunk_size = chunk_size or int(os.getenv("CHUNK_SIZE", "800"))
+        self.chunk_overlap = chunk_overlap or int(os.getenv("CHUNK_OVERLAP", "120"))
+        self.min_chunk_length = min_chunk_length
 
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0.")
@@ -40,9 +45,6 @@ class TextChunker:
                 "chunk_overlap must be smaller than chunk_size."
             )
 
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.min_chunk_length = min_chunk_length
 
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
