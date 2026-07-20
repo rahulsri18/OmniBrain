@@ -1,5 +1,6 @@
 from agents.state import GraphState
 from agents.retriever import retriever_tool
+from agents.output_parser import parse_retriever_output
 
 
 def router_node(state: GraphState) -> GraphState:
@@ -18,7 +19,9 @@ def retrieve_node(state: GraphState) -> GraphState:
 
     documents = retriever_tool(query)
 
-    state["context"] = documents
+    clean_context = parse_retriever_output(documents)
+
+    state["context"] = [clean_context]
 
     return state
 
