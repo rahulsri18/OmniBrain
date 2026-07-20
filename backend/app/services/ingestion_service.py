@@ -1,6 +1,7 @@
 # backend/app/services/ingestion_service.py
 import os
 import shutil
+import traceback
 from fastapi import UploadFile
 from app.logger import logger
 
@@ -51,7 +52,10 @@ class IngestionService:
             logger.info(f"[Background] Ingestion successful for: {original_filename}")
 
         except Exception as e:
-            logger.error(f"[Background] Critical error in ingestion pipeline for {original_filename}: {e}")
+            traceback.print_exc()
+            logger.exception(
+        f"[Background] Critical error in ingestion pipeline for {original_filename}"
+        )
             
         finally:
             # क्लीनअप: काम होने के बाद (या एरर आने पर भी) टेम्परेरी फाइल डिलीट करो
