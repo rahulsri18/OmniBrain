@@ -21,7 +21,14 @@ def render_uploader():
 
         if st.button("Upload to Backend"):
 
+            progress = st.progress(0)
+
+            for i in range(100):
+                progress.progress(i + 1)
+
             response = upload_pdf(uploaded_file)
+
+            progress.empty()
 
             if hasattr(response, "status_code"):
 
