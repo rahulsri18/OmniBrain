@@ -1,23 +1,18 @@
+
+
 import streamlit as st
 
-
 def render_document_table():
+    st.subheader("📄 Uploaded Documents Status")
 
-    st.subheader("📄 Uploaded Documents")
+    # 🚀 फिक्स: हार्डकोडेड डेटा की जगह Session State से डायनेमिक डेटा उठाना
+    if "uploaded_files" not in st.session_state or not st.session_state.uploaded_files:
+        st.info("No documents uploaded in this session yet.")
+        return
 
-    documents = [
-        {
-            "File Name": "Annual_Report.pdf",
-            "Status": "Processed"
-        },
-        {
-            "File Name": "Research_Paper.pdf",
-            "Status": "Processing"
-        },
-        {
-            "File Name": "Invoice.pdf",
-            "Status": "Pending"
-        }
-    ]
-
-    st.table(documents)
+    # डेटा को टेबल फॉर्मेट में दिखाना
+    st.dataframe(
+        st.session_state.uploaded_files, 
+        use_container_width=True,
+        hide_index=True
+    )
