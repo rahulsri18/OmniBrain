@@ -1,33 +1,21 @@
+# agents/nodes.py
 from agents.state import GraphState
 from agents.retriever import retriever_tool
 from agents.output_parser import parse_retriever_output
 
-
 def router_node(state: GraphState) -> GraphState:
     """
-    Decide which route to take based on the user query.
+    Relevant context/documents को रिट्राइव और पार्स करके स्टेट में अपडेट करता है।
     """
-    return state
-
-
-def retrieve_node(state: GraphState) -> GraphState:
-    """
-    Retrieve relevant context/documents.
-    """
-
     query = state["question"]
 
-    documents = retriever_tool(query)
+    # 1. रॉ डॉक्यूमेंट्स फेच करो
+    raw_documents = retriever_tool(query)
 
-    clean_context = parse_retriever_output(documents)
+    # 2. पार्सर से उसे क्लीन List[str] में बदलो
+    clean_context_list = parse_retriever_output(raw_documents)
 
-    state["context"] = [clean_context]
+    # 3. स्टेट को सीधे लिस्ट असाइन करो (बिना एक्स्ट्रा ब्रैकेट के)
+    state["context"] = clean_context_list
 
-    return state
-
-
-def generate_node(state: GraphState) -> GraphState:
-    """
-    Generate the final response.
-    """
     return state
