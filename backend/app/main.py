@@ -1,6 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-# 👈 अपनी नई सर्विस को इम्पोर्ट करो
 from app.services.ingestion_service import IngestionService  
 
 app = FastAPI(
@@ -16,8 +15,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# सर्विस क्लास को इनिशियलाइज़ किया
 ingestion_service = IngestionService()
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 50 MB
 
 
 @app.get("/")
@@ -30,7 +29,7 @@ async def upload_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
 ):
-    # डबल वैलिडेशन (M5 का कोड)
+    # डबल वैलिडेशन
     is_pdf_mime = file.content_type == "application/pdf"
     is_pdf_ext = file.filename.lower().endswith(".pdf")
 
@@ -39,14 +38,31 @@ async def upload_file(
             status_code=400,
             detail="Only PDF files are allowed."
         )
+    # File size validation (500 MB)
+    file.file.seek(0, 2)              # Move to end of file
+    file_size = file.file.tell()      # Get file size in bytes
+    file.file.seek(0)                 # Move back to beginning
 
-    # 👈 तुम्हारी सर्विस पाइपलाइन यहाँ ट्रिगर होगी
-    background_tasks.add_task(
-    ingestion_service.process_pipeline,
-    file
-)
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+        status_code=413,
+        detail="File size exceeds the 500 MB limit."
+    )
+    try:
+        # 🔥 फिक्स: फ़ाइल को रिक्वेस्ट खत्म होने से पहले तुरंत डिस्क पर सेव कर लो
+        temp_file_path = await ingestion_service.save_file_temporarily(file)
+        
+        # 🔥 अब बैकग्राउंड टास्क को 'file' ऑब्जेक्ट नहीं, बल्कि 'file_path' भेजो
+        background_tasks.add_task(
+            ingestion_service.process_pipeline_from_path,  # तुम्हारी सर्विस का नया मेथड
+            temp_file_path,
+            file.filename
+        )
 
-    return {
-    "status": "accepted",
-    "message": "File uploaded successfully. Ingestion pipeline started in background."
-}
+        return {
+            "status": "accepted",
+            "filename": file.filename,
+            "message": "File uploaded successfully. Processing started in the background."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")

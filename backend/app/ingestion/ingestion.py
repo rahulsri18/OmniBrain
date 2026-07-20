@@ -17,14 +17,14 @@ Store in Qdrant
 
 
 from pathlib import Path
-from utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
+from app.utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
 from app.ingestion.chunker import TextChunker
 from app.ingestion.embedding import EmbeddingGenerator
 from app.vectordb.qdrant_client import QdrantDB
 
 
 class IngestionPipeline:
-    def _init_(self):
+    def __init__(self):
         self.chunker = TextChunker(chunk_size=1000, chunk_overlap=200)
         self.embedder = EmbeddingGenerator()
         self.db = QdrantDB()  # यह अपने आप .env से 384 साइज़ उठा लेगा
