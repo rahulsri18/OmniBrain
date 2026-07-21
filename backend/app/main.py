@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.ingestion_service import IngestionService  
+from .services.ingestion_service import IngestionService  
 
 app = FastAPI(
     title="OmniBrain Backend",

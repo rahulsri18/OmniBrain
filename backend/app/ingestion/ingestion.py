@@ -13,14 +13,14 @@ PDF
 
 import os
 from pathlib import Path
-from app.utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
-from app.ingestion.chunker import TextChunker
-from app.ingestion.embedding import EmbeddingGenerator
-from app.vectordb.qdrant_client import QdrantDB
+from ..utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
+from .chunker import TextChunker
+from .embedding import EmbeddingGenerator
+from ..vectordb.qdrant_client import QdrantDB
 
 # 🚀 M4 विज़न मॉड्यूल इम्पोर्ट्स
-from app.utils.vision_extractor import PDFVisionExtractor
-from app.ingestion.vision_pipeline import VisionIngestionPipeline
+from ..utils.vision_extractor import PDFVisionExtractor
+from .vision_pipeline import VisionIngestionPipeline
 
 
 class IngestionPipeline:

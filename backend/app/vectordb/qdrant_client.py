@@ -8,8 +8,17 @@ import os
 from uuid import uuid4
 from typing import List, Dict, Optional
 
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import Distance, VectorParams, PointStruct
+except Exception:
+    QdrantClient = None
+    Distance = None
+    VectorParams = None
+    PointStruct = None
+    _MISSING_QDRANT_MSG = (
+        "qdrant-client package is not installed. Install with: pip install qdrant-client"
+    )
 
 
 class QdrantDB:
@@ -24,15 +33,24 @@ class QdrantDB:
         self.collection_name = collection_name or os.getenv("COLLECTION_NAME", "omnibrain")
         self.vector_size = vector_size or int(os.getenv("VECTOR_SIZE", "384"))
 
-        self.client = QdrantClient(host=host, port=port)
-        
-        # 🚀 क्लास बनते ही कलेक्शन अपने आप चेक और क्रिएट हो जाएगा
-        self.setup_collection()
+        if QdrantClient is None:
+            # Keep object alive for development runs; methods will raise if used.
+            self.client = None
+            print(_MISSING_QDRANT_MSG)
+        else:
+            self.client = QdrantClient(host=host, port=port)
+
+        # Only attempt to setup collection if qdrant-client is available
+        if self.client is not None:
+            self.setup_collection()
 
     def setup_collection(self):
         """
         Create collection if it doesn't already exist.
         """
+        if self.client is None:
+            raise RuntimeError(_MISSING_QDRANT_MSG)
+
         try:
             collections = self.client.get_collections().collections
             names = [c.name for c in collections]
@@ -56,11 +74,13 @@ class QdrantDB:
         chunks: List[str],
         embeddings: List[List[float]],
         metadata: Optional[List[Dict]] = None,
+        collection_name: Optional[str] = None,
     ):
         """
         Insert vectors into Qdrant.
         """
         points = []
+        
 
         for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             payload = {"text": chunk}
@@ -75,18 +95,29 @@ class QdrantDB:
             )
             points.append(point)
 
+        if self.client is None:
+            raise RuntimeError(_MISSING_QDRANT_MSG)
+
         self.client.upsert(
-            collection_name=self.collection_name,
+            collection_name=collection_name or self.collection_name,
             points=points,
         )
         print(f"Successfully inserted {len(points)} vectors into Qdrant.")
 
-    def search(self, query_embedding: List[float], limit: int = 5):
+    def search(
+        self,
+        query_embedding,
+        limit=5,
+        collection_name=None,
+    ):
         """
         Search similar vectors.
         """
+        if self.client is None:
+            raise RuntimeError(_MISSING_QDRANT_MSG)
+
         results = self.client.query_points(
-            collection_name=self.collection_name,
+            collection_name=collection_name or self.collection_name,
             query=query_embedding,
             limit=limit,
         )
@@ -96,5 +127,37 @@ class QdrantDB:
         """
         Delete collection.
         """
+        if self.client is None:
+            raise RuntimeError(_MISSING_QDRANT_MSG)
+
         self.client.delete_collection(collection_name=self.collection_name)
         print("Collection deleted.")
+
+    def create_collection(self, collection_name: str, vector_size: int):
+        """
+        Create a new Qdrant collection if it doesn't already exist.
+        """
+        try:
+            if self.client is None:
+                raise RuntimeError(_MISSING_QDRANT_MSG)
+
+            collections = self.client.get_collections().collections
+            names = [c.name for c in collections]
+
+            if collection_name not in names:
+
+                self.client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(
+                        size=vector_size,
+                        distance=Distance.COSINE,
+                    ),
+                )
+
+                print(f"Collection '{collection_name}' created successfully.")
+
+            else:
+                print(f"Collection '{collection_name}' already exists.")
+
+        except Exception as e:
+            print(f"Error creating collection '{collection_name}': {e}")
