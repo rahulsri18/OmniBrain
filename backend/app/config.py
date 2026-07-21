@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None
     VECTOR_DB_COLLECTION: str = "omnibrain_vectors"
+    SEARCH_SCORE_THRESHOLD: float = 0.75
 
     # SQL DB Config
     SQLITE_DB_PATH: str = str(BASE_DIR / "data" / "stock_history.db")
