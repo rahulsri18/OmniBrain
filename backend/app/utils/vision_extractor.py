@@ -76,3 +76,4 @@ class PDFVisionExtractor:
             logger.error(f"Error extracting images from PDF {pdf_path}: {str(e)}")
             
         return extracted_paths
+        
