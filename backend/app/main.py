@@ -50,7 +50,7 @@ async def upload_file(
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
         status_code=413,
-        detail="File size exceeds the 500 MB limit."
+        detail="File size exceeds the 50 MB limit."
     )
     try:
         # 🔥 फिक्स: फ़ाइल को रिक्वेस्ट खत्म होने से पहले तुरंत डिस्क पर सेव कर लो
@@ -93,4 +93,22 @@ async def chat(request: ChatRequest):
     return StreamingResponse(
         chat_stream(request.message),
         media_type="text/event-stream"
+    )
+from app.services.session_manager import session_manager
+
+@app.post("/api/v1/chat")
+async def chat(request: ChatRequest):
+    # 1. सेशन आईडी चेक या क्रिएट करो
+    session_id = request.session_id
+    if not session_id or not session_manager.get_session(session_id):
+        session_id = session_manager.create_session()
+
+    # 2. यूज़र मैसेज हिस्ट्री में जोड़ो
+    session_manager.add_message(session_id, role="user", content=request.message)
+
+    # 3. स्ट्रीमिंग रिस्पॉन्स में सेशन आईडी रिफ्लेक्ट करो
+    return StreamingResponse(
+        chat_stream(request.message, session_id),
+        media_type="text/event-stream",
+        headers={"X-Session-ID": session_id}
     )
