@@ -14,7 +14,7 @@ from components.sidebar import render_sidebar
 from components.header import render_header
 from components.uploader import render_uploader
 from components.document_table import render_document_table
-
+from components.chat import render_chat
 # साइडबार रेंडर करें
 render_sidebar()
 # हेडर रेंडर करें
@@ -32,4 +32,4 @@ if st.session_state.get("current_page") == "Upload":
         render_document_table()
 
 elif st.session_state.get("current_page") == "Chat":
-    st.info("💬 Chat interface is under construction for the next milestone.")
+    render_chat()
