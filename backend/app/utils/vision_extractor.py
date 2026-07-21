@@ -2,7 +2,7 @@ import os
 import fitz  # PyMuPDF
 from io import BytesIO
 from PIL import Image
-from app.logger import logger
+from ..logger import logger
 
 class PDFVisionExtractor:
     """

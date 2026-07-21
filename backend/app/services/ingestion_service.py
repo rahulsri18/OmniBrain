@@ -3,10 +3,10 @@ import os
 import shutil
 import traceback
 from fastapi import UploadFile
-from app.logger import logger
+from ..logger import logger
 
 # M2 की फाइनल हो चुकी असली पाइपलाइन को इम्पोर्ट कर रहे हैं
-from app.ingestion.ingestion import IngestionPipeline
+from ..ingestion.ingestion import IngestionPipeline
 
 
 class IngestionService:

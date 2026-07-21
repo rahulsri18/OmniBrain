@@ -3,8 +3,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel 
 import asyncio
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.ingestion_service import IngestionService  
-from app.sql_agent.schema import ChatRequest  # Import the schema here
+from .services.ingestion_service import IngestionService
+from .sql_agent.schema import ChatRequest
 
 app = FastAPI(
     title="OmniBrain Backend",

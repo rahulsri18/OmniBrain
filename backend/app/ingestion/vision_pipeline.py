@@ -95,11 +95,13 @@ class VisionIngestionPipeline:
             
             # अगर M2 की insert_vectors क्लास डायरेक्ट कलेक्शन नेम एक्सेप्ट करती है:
             self.db.insert_vectors(
-                chunks=valid_paths,  # Chunks पैरामीटर में इमेज पाथ पास कर रहे हैं
-                embeddings=embeddings,
-                metadata=metadata,
-                # collection_name=self.collection_name # अगर M2 ने सपोर्ट दिया है
-            )
+                    chunks=valid_paths,  # Chunks पैरामीटर में इमेज पाथ पास कर रहे हैं
+                    embeddings=embeddings,
+                    metadata=metadata,
+                    collection_name=self.collection_name # अगर M2 ने सपोर्ट दिया है
+                )
             logger.info("Vision vectors ingestion completed successfully!")
         except Exception as e:
             logger.error(f"Failed storing vision vectors in Qdrant: {e}")
+
+        
