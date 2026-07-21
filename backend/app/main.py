@@ -1,6 +1,10 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel 
+import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from .services.ingestion_service import IngestionService  
+from app.sql_agent.schema import ChatRequest  # Import the schema here
 
 app = FastAPI(
     title="OmniBrain Backend",
@@ -66,3 +70,27 @@ async def upload_file(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    
+async def chat_stream(message: str):
+    words = [
+        "Hello!",
+        "This",
+        "is",
+        "a",
+        "streaming",
+        "response",
+        "from",
+        "OmniBrain."
+    ]
+
+    for word in words:
+        yield f"data: {word}\n\n"
+        await asyncio.sleep(0.3)
+
+
+@app.post("/api/v1/chat")
+async def chat(request: ChatRequest):
+    return StreamingResponse(
+        chat_stream(request.message),
+        media_type="text/event-stream"
+    )
