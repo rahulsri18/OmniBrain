@@ -34,13 +34,13 @@ class TextChunker:
         self.chunk_overlap = chunk_overlap or int(os.getenv("CHUNK_OVERLAP", "120"))
         self.min_chunk_length = min_chunk_length
 
-        if chunk_size <= 0:
+        if self.chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0.")
 
-        if chunk_overlap < 0:
+        if self.chunk_overlap < 0:
             raise ValueError("chunk_overlap cannot be negative.")
 
-        if chunk_overlap >= chunk_size:
+        if self.chunk_overlap >= self.chunk_size:
             raise ValueError(
                 "chunk_overlap must be smaller than chunk_size."
             )
