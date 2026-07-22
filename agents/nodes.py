@@ -1,21 +1,43 @@
-# agents/nodes.py
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+
 from agents.state import GraphState
 from agents.retriever import retriever_tool
 from agents.output_parser import parse_retriever_output
+from agents.prompts import SUPERVISOR_SYSTEM_PROMPT
+
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0
+)
+
 
 def router_node(state: GraphState) -> GraphState:
     """
-    Relevant context/documents को रिट्राइव और पार्स करके स्टेट में अपडेट करता है।
+    Supervisor node that routes the query using GPT-4o.
     """
-    query = state["question"]
 
-    # 1. रॉ डॉक्यूमेंट्स फेच करो
-    raw_documents = retriever_tool(query)
+    messages = [
+        SystemMessage(content=SUPERVISOR_SYSTEM_PROMPT),
+        HumanMessage(content=state["question"])
+    ]
 
-    # 2. पार्सर से उसे क्लीन List[str] में बदलो
+    response = llm.invoke(messages)
+
+    route = response.content.strip().lower()
+
+    valid_routes = {"retriever", "sql", "vision", "general"}
+
+    if route not in valid_routes:
+        route = "general"
+
+    state["route"] = route
+
+    raw_documents = retriever_tool(state["question"])
+
     clean_context_list = parse_retriever_output(raw_documents)
 
-    # 3. स्टेट को सीधे लिस्ट असाइन करो (बिना एक्स्ट्रा ब्रैकेट के)
     state["context"] = clean_context_list
 
     return state

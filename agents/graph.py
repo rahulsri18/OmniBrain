@@ -4,6 +4,16 @@ from agents.state import GraphState
 from agents.nodes import router_node
 
 
+def route_query(state: GraphState):
+    return state.get("route", "general")
+
+
+builder = StateGraph(GraphState)
+
+builder.add_node("router", router_node)
+
+builder.set_entry_point("router")
+
 def route_query(state: GraphState) -> str:
     """
     Supervisor routing logic: State से 'route' की वैल्यू रीड करता है।
@@ -34,6 +44,10 @@ builder.add_conditional_edges(
     "router",
     route_query,
     {
+        "retriever": END,
+        "sql": END,
+        "vision": END,
+        "general": END,
         "end": END,
         # भविष्य के नोड्स के लिए प्लेसहोलडर (Day 7 में इनेबल होंगे):
         # "rag": "rag_node",
