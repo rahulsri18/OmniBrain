@@ -12,6 +12,7 @@ import torch
 from transformers import CLIPProcessor, CLIPModel
 
 from .embedding import EmbeddingGenerator
+from .retrieval_filter import RetrievalFilter
 from ..vectordb.qdrant_client import QdrantDB
 from ..logger import logger
 
@@ -38,6 +39,8 @@ class HybridRetriever:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.clip_model.to(self.device)
 
+        self.retrieval_filter = RetrievalFilter()
+
         # Qdrant DB client (single instance can query multiple collections)
         self.db = QdrantDB()
         self.text_collection = text_collection or self.db.collection_name
@@ -49,9 +52,17 @@ class HybridRetriever:
         Supports both attribute objects and plain dicts.
         """
         try:
-            pid = getattr(point, "id", None) or (point.get("id") if isinstance(point, dict) else None)
-            payload = getattr(point, "payload", None) or (point.get("payload") if isinstance(point, dict) else None)
-            score = getattr(point, "score", None) or (point.get("score") if isinstance(point, dict) else None)
+            pid = getattr(point, "id", None)
+            if pid is None and isinstance(point, dict):
+                pid = point.get("id")
+
+            payload = getattr(point, "payload", None)
+            if payload is None and isinstance(point, dict):
+                payload = point.get("payload")
+
+            score = getattr(point, "score", None)
+            if score is None and isinstance(point, dict):
+                score = point.get("score")
         except Exception:
             pid = point.get("id") if isinstance(point, dict) else None
             payload = point.get("payload") if isinstance(point, dict) else None
@@ -127,8 +138,11 @@ class HybridRetriever:
 
     def retrieve(self, query: str, top_k_text: int = 5, top_k_images: int = 5) -> Dict[str, Any]:
         """Run both text and image retrieval and return merged response."""
-        text_matches = self.search_text(query, top_k=top_k_text)
-        image_matches = self.search_images(query, top_k=top_k_images)
+        raw_text_matches = self.search_text(query, top_k=top_k_text)
+        raw_image_matches = self.search_images(query, top_k=top_k_images)
+
+        text_matches = self.retrieval_filter.filter_results(raw_text_matches)
+        image_matches = self.retrieval_filter.filter_results(raw_image_matches)
 
         # Merge by score (if available) into a single list for convenience.
         merged = []
