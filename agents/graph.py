@@ -43,3 +43,34 @@ builder.add_conditional_edges(
 
 # 5. ग्राफ कंपाइल करें
 graph = builder.compile()
+"""
+graph.py
+
+LangGraph Workflow Definition & Compiler.
+"""
+
+from langgraph.graph import StateGraph, END
+from typing import TypedDict, List, Dict, Any, Optional
+
+class AgentState(TypedDict):
+    messages: List[Dict[str, Any]]
+    session_id: str
+    file_path: Optional[str]
+    next_node: str
+
+# Define nodes...
+def router_node(state: AgentState):
+    return state
+
+# Build graph
+workflow = StateGraph(AgentState)
+workflow.add_node("router", router_node)
+workflow.set_entry_point("router")
+workflow.add_edge("router", END)
+
+# 🚀 Compile LangGraph workflow
+app_graph = workflow.compile()
+from agents.vision_node import vision_node
+
+# Add Node to LangGraph StateGraph
+workflow.add_node("vision_node", vision_node)
