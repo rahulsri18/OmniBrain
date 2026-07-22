@@ -5,6 +5,7 @@ import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
+from app.utils.stream_formatter import stream_formatter
 
 app = FastAPI(
     title="OmniBrain Backend",
@@ -71,7 +72,8 @@ async def upload_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
     
-async def chat_stream(message: str):
+async def chat_stream(message: str, session_id: str = None):
+
     words = [
         "Hello!",
         "This",
@@ -83,9 +85,13 @@ async def chat_stream(message: str):
         "OmniBrain."
     ]
 
-    for word in words:
-        yield f"data: {word}\n\n"
-        await asyncio.sleep(0.3)
+    async def event_stream():
+        for word in words:
+            yield {"type": "assistant", "content": word}
+            await asyncio.sleep(0.3)
+
+    async for chunk in stream_formatter(event_stream()):
+        yield chunk
 
 
 @app.post("/api/v1/chat")
