@@ -1,0 +1,51 @@
+/* Hide Streamlit menu & footer */
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+header {
+    visibility: hidden;
+}
+
+/* App background */
+.stApp {
+    background-color: #0b1220;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #111827;
+}
+
+/* Titles */
+h1,
+h2,
+h3 {
+    color: white;
+}
+
+/* Buttons */
+.stButton>button {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid #2d3748;
+    background: #1f2937;
+    color: white;
+    height: 44px;
+}
+
+.stButton>button:hover {
+    background: #7c3aed;
+    color: white;
+}
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+    border: 2px dashed #7c3aed;
+    border-radius: 16px;
+    padding: 20px;
+}
