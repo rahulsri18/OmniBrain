@@ -3,14 +3,18 @@ import streamlit as st
 
 def render_chat():
 
-    st.subheader("💬 OmniBrain Chat")
+    st.title("💬 OmniBrain AI Assistant")
+    st.caption("Ask questions about your uploaded documents.")
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
     # Display previous messages
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
+
+        avatar = "👤" if message["role"] == "user" else "🤖"
+
+        with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
 
     # Chat input
@@ -21,24 +25,24 @@ def render_chat():
         st.session_state.messages.append(
             {
                 "role": "user",
-                "content": prompt
+                "content": prompt,
             }
         )
 
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
 
         response = (
-            "🤖 This is a placeholder response. "
-            "Backend AI integration will be added later."
+            "This is a placeholder response from OmniBrain.\n\n"
+            "Backend integration with the LangGraph agent will be connected in the next milestone."
         )
 
         st.session_state.messages.append(
             {
                 "role": "assistant",
-                "content": response
+                "content": response,
             }
         )
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar="🤖"):
             st.markdown(response)
