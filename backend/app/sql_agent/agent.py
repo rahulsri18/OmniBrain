@@ -3,12 +3,10 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from backend.app.sql_agent.prompts import SQL_SYSTEM_PROMPT
 
-
 llm = ChatOpenAI(
     model="gpt-4o",
     temperature=0
 )
-
 
 def sql_agent_node(question: str) -> str:
     """

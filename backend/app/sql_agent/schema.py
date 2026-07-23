@@ -1,4 +1,9 @@
 from typing import TypedDict
+from pydantic import BaseModel
+
+
+class ChatRequest(BaseModel):
+    message: str
 
 
 class SQLAgentState(TypedDict):
