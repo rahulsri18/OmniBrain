@@ -52,7 +52,7 @@ async def stream_graph_response(user_message: str, session_id: str, file_path: O
                 logger.info(f"Session {session_id}: Executing LangGraph Node -> {event['name']}")
 
         # Signal end of stream
-        yield "data: [DONE]\n\n"
+        yield f"data: {json.dumps({'type': 'telemetry', 'step': event['name']})}\n\n"
 
     except Exception as e:
         logger.error(f"Error during LangGraph streaming execution for session {session_id}: {str(e)}")
