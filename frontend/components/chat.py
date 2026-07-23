@@ -45,4 +45,16 @@ def render_chat():
         )
 
         with st.chat_message("assistant", avatar="🤖"):
-            st.markdown(response)
+         st.markdown(response)
+
+         with st.expander("🧠 Agent Reasoning"):
+
+            st.markdown("### Execution Steps")
+ 
+            st.success("✅ Question received")
+
+            st.success("✅ Retrieved relevant document chunks")
+
+            st.success("✅ Generated final response")
+
+            st.info("Backend reasoning stream will be connected in future milestones.")
