@@ -2,17 +2,18 @@
 chat.py
 
 API Controller / Endpoint for Chat streaming.
-Integrates FastAPI with the compiled LangGraph workflow.
+Integrates FastAPI with the compiled LangGraph workflow and streams 
+both LLM tokens and Agent Reasoning / Steps.
 """
 
+import json
+from typing import AsyncGenerator, Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-import json
-from typing import AsyncGenerator, Optional
 
-# 🎯 यहाँ पाथ चेंज किया गया है (क्योंकि agents डायरेक्ट backend/ के अंदर है)
-from agents.graph import app_graph  # Directly importing from backend/agents/graph.py
+# Importing graph from backend/agents/graph.py
+from agents.graph import app_graph
 from app.logger import logger
 
 router = APIRouter()
@@ -24,10 +25,14 @@ class ChatRequest(BaseModel):
     file_path: Optional[str] = Field(None, description="Optional attached document/image path")
 
 
-async def stream_graph_response(user_message: str, session_id: str, file_path: Optional[str] = None) -> AsyncGenerator[str, None]:
+async def stream_graph_response(
+    user_message: str, 
+    session_id: str, 
+    file_path: Optional[str] = None
+) -> AsyncGenerator[str, None]:
     """
     Middleware generator that executes the compiled LangGraph agent 
-    and streams back response chunks as Server-Sent Events (SSE).
+    and streams back response chunks along with agent reasoning as SSE.
     """
     try:
         # 1. Initial State Definition for LangGraph
@@ -38,25 +43,34 @@ async def stream_graph_response(user_message: str, session_id: str, file_path: O
             "next_node": ""
         }
 
-        # 2. Invoke / Stream graph events
+        current_active_node = "supervisor"
+
+        # 2. Stream graph events from LangGraph
         async for event in app_graph.astream_events(initial_state, version="v2"):
             kind = event.get("event")
+            name = event.get("name", "")
 
-            # Stream LLM generation tokens directly to frontend
-            if kind == "on_chat_model_stream":
-                chunk = event["data"]["chunk"]
+            # 🧠 A. Emit Reasoning / Agent Step when a new node starts executing
+            if kind == "on_chain_start" and name in ["supervisor", "rag_node", "sql_node", "vision_node"]:
+                current_active_node = name
+                reasoning_msg = f"Agent routing to or processing in node: '{name}'"
+                logger.info(f"Session {session_id}: Executing Node -> {name}")
+
+                yield f"data: {json.dumps({'type': 'reasoning', 'thought': reasoning_msg, 'node': name})}\n\n"
+
+            # 💬 B. Stream LLM text tokens directly to frontend
+            elif kind == "on_chat_model_stream":
+                chunk = event.get("data", {}).get("chunk")
                 if hasattr(chunk, "content") and chunk.content:
-                    yield f"data: {json.dumps({'content': chunk.content})}\n\n"
+                    yield f"data: {json.dumps({'type': 'content', 'content': chunk.content, 'node': current_active_node})}\n\n"
 
-            elif kind == "on_chain_start" and event.get("name") in ["rag_node", "sql_node", "vision_node"]:
-                logger.info(f"Session {session_id}: Executing LangGraph Node -> {event['name']}")
-
-        # Signal end of stream
-        yield f"data: {json.dumps({'type': 'telemetry', 'step': event['name']})}\n\n"
+        # 🏁 C. Signal end of stream
+        yield f"data: {json.dumps({'type': 'status', 'status': 'completed', 'step': current_active_node})}\n\n"
+        yield "data: [DONE]\n\n"
 
     except Exception as e:
         logger.error(f"Error during LangGraph streaming execution for session {session_id}: {str(e)}")
-        err_msg = json.dumps({"error": "An error occurred while processing your query."})
+        err_msg = json.dumps({"type": "error", "content": "An error occurred while processing your query."})
         yield f"data: {err_msg}\n\n"
 
 
