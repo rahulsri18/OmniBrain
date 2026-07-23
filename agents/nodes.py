@@ -1,5 +1,6 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
+from backend.app.sql_agent.agent import sql_agent_node
 
 from agents.state import GraphState
 from agents.retriever import retriever_tool
@@ -34,10 +35,15 @@ def router_node(state: GraphState) -> GraphState:
 
     state["route"] = route
 
+    if route == "sql":
+     sql_query = sql_agent_node(state["question"])
+     state["metadata"]["sql_query"] = sql_query
+     return state
+
     raw_documents = retriever_tool(state["question"])
 
     clean_context_list = parse_retriever_output(raw_documents)
 
     state["context"] = clean_context_list
-
+  
     return state
