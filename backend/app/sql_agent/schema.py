@@ -1,4 +1,5 @@
 from typing import TypedDict
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -13,3 +14,6 @@ class SQLAgentState(TypedDict):
 
     question: str
     sql_query: str
+    session_id: Optional[str] = None
+    file_path: Optional[str] = None  # Optional field for attached document/image path
+    

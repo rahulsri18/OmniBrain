@@ -1,15 +1,16 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel 
 import asyncio
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from app.services.session_manager import session_manager
+from app.utils.stream_formatter import stream_formatter
+
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
 
-app = FastAPI(
-    title="OmniBrain Backend",
-    version="0.1.0"
-)
+app = FastAPI(title="OmniBrain Backend", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,7 +21,7 @@ app.add_middleware(
 )
 
 ingestion_service = IngestionService()
-MAX_FILE_SIZE = 50 * 1024 * 1024  
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
 @app.get("/")
@@ -30,48 +31,46 @@ def home():
 
 @app.post("/api/v1/upload")
 async def upload_file(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
+    background_tasks: BackgroundTasks, file: UploadFile = File(...)
 ):
-    # डबल वैलिडेशन
+    # MIME / Extension validation
     is_pdf_mime = file.content_type == "application/pdf"
     is_pdf_ext = file.filename.lower().endswith(".pdf")
 
     if not (is_pdf_mime or is_pdf_ext):
         raise HTTPException(
-            status_code=400,
-            detail="Only PDF files are allowed."
+            status_code=400, detail="Only PDF files are allowed."
         )
-    # File size validation (500 MB)
-    file.file.seek(0, 2)              # Move to end of file
-    file_size = file.file.tell()      # Get file size in bytes
-    file.file.seek(0)                 # Move back to beginning
+
+    # File size validation
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
 
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
-        status_code=413,
-        detail="File size exceeds the 50 MB limit."
-    )
+            status_code=413, detail="File size exceeds the 50 MB limit."
+        )
+
     try:
-        # 🔥 फिक्स: फ़ाइल को रिक्वेस्ट खत्म होने से पहले तुरंत डिस्क पर सेव कर लो
         temp_file_path = await ingestion_service.save_file_temporarily(file)
-        
-        # 🔥 अब बैकग्राउंड टास्क को 'file' ऑब्जेक्ट नहीं, बल्कि 'file_path' भेजो
+
         background_tasks.add_task(
-            ingestion_service.process_pipeline_from_path,  # तुम्हारी सर्विस का नया मेथड
+            ingestion_service.process_pipeline_from_path,
             temp_file_path,
-            file.filename
+            file.filename,
         )
 
         return {
             "status": "accepted",
             "filename": file.filename,
-            "message": "File uploaded successfully. Processing started in the background."
+            "message": "File uploaded successfully. Processing started in the background.",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
-    
-async def chat_stream(message: str):
+
+
+async def chat_stream(message: str, session_id: str = None):
     words = [
         "Hello!",
         "This",
@@ -80,35 +79,33 @@ async def chat_stream(message: str):
         "streaming",
         "response",
         "from",
-        "OmniBrain."
+        "OmniBrain.",
     ]
 
-    for word in words:
-        yield f"data: {word}\n\n"
-        await asyncio.sleep(0.3)
+    async def event_stream():
+        # Stream mock words (Will be replaced by LangGraph stream in next milestone)
+        for word in words:
+            yield {"type": "assistant", "content": word}
+            await asyncio.sleep(0.15)
+
+    async for chunk in stream_formatter(event_stream()):
+        yield chunk
 
 
 @app.post("/api/v1/chat")
 async def chat(request: ChatRequest):
-    return StreamingResponse(
-        chat_stream(request.message),
-        media_type="text/event-stream"
-    )
-from app.services.session_manager import session_manager
-
-@app.post("/api/v1/chat")
-async def chat(request: ChatRequest):
-    # 1. सेशन आईडी चेक या क्रिएट करो
+    """Clean Single Route for Chat Streaming with Session Management."""
     session_id = request.session_id
     if not session_id or not session_manager.get_session(session_id):
         session_id = session_manager.create_session()
 
-    # 2. यूज़र मैसेज हिस्ट्री में जोड़ो
-    session_manager.add_message(session_id, role="user", content=request.message)
+    # Save user message to session memory
+    session_manager.add_message(
+        session_id, role="user", content=request.message
+    )
 
-    # 3. स्ट्रीमिंग रिस्पॉन्स में सेशन आईडी रिफ्लेक्ट करो
     return StreamingResponse(
         chat_stream(request.message, session_id),
         media_type="text/event-stream",
-        headers={"X-Session-ID": session_id}
+        headers={"X-Session-ID": session_id},
     )
