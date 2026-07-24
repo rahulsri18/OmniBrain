@@ -1,13 +1,13 @@
 import asyncio
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+
 from app.services.session_manager import session_manager
 from app.utils.stream_formatter import stream_formatter
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
-
 
 app = FastAPI(title="OmniBrain Backend", version="0.1.0")
 
@@ -21,20 +21,26 @@ app.add_middleware(
 
 ingestion_service = IngestionService()
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-REQUEST_TIMEOUT = 30 #seconds
+REQUEST_TIMEOUT = 30  # seconds
 
 
+# 🎯 Improved Timeout Middleware
 @app.middleware("http")
-async def timeout_middleware (request, call_next):
+async def timeout_middleware(request, call_next):
+    # Streaming endpoints require chunk-level timeouts inside generators.
+    # Standard endpoints are guarded by this global timeout.
+    if request.url.path.startswith("/api/v1/chat"):
+        return await call_next(request)
+
     try:
-        response = await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT)
-        return response
+        return await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT)
     except asyncio.TimeoutError:
         return JSONResponse(
             status_code=504,
             content={"detail": "Request timed out. Please try again."},
         )
-        
+
+
 @app.get("/")
 def home():
     return {"message": "Server is running"}
@@ -94,10 +100,14 @@ async def chat_stream(message: str, session_id: str = None):
     ]
 
     async def event_stream():
-        # Stream mock words (Will be replaced by LangGraph stream in next milestone)
         for word in words:
-            yield {"type": "assistant", "content": word}
-            await asyncio.sleep(0.15)
+            # 🎯 Chunk-level Timeout Protection for Streams
+            try:
+                await asyncio.wait_for(asyncio.sleep(0.15), timeout=5.0)
+                yield {"type": "assistant", "content": word}
+            except asyncio.TimeoutError:
+                yield {"type": "error", "content": "Stream response timed out."}
+                break
 
     async for chunk in stream_formatter(event_stream()):
         yield chunk
@@ -106,11 +116,10 @@ async def chat_stream(message: str, session_id: str = None):
 @app.post("/api/v1/chat")
 async def chat(request: ChatRequest):
     """Clean Single Route for Chat Streaming with Session Management."""
-    session_id = request.session_id
+    session_id = getattr(request, "session_id", None)
     if not session_id or not session_manager.get_session(session_id):
         session_id = session_manager.create_session()
 
-    # Save user message to session memory
     session_manager.add_message(
         session_id, role="user", content=request.message
     )

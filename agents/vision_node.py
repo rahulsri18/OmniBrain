@@ -120,3 +120,73 @@ def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "messages": new_messages,
         "next_node": "END"
     }
+    """
+vision_node.py
+
+Vision Agent Node using ChatOpenAI (GPT-4o) with strict numerical reading rules.
+"""
+
+from typing import Any, Dict
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from backend.app.logger import logger
+from agents.prompts import VISION_SYSTEM_PROMPT  # Importing updated prompt
+
+
+llm_vision = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0.0  # 🎯 Strict zero-temperature to avoid creative hallucination of numbers
+)
+
+
+def vision_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Processes image/visual queries with strict numerical reading rules.
+    """
+    question = state.get("question", "")
+    file_path = state.get("file_path") or state.get("image_path")
+
+    if not file_path:
+        logger.warning("Vision node invoked without an image/file path.")
+        return {
+            "messages": [
+                HumanMessage(
+                    content="Error: No image or visual file was provided for analysis."
+                )
+            ]
+        }
+
+    try:
+        # Construct multimodal input message
+        messages = [
+            SystemMessage(content=VISION_SYSTEM_PROMPT),
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": question},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"file://{file_path}"},
+                    },
+                ]
+            ),
+        ]
+
+        logger.info(f"Executing Vision Node for file: {file_path}")
+        response = llm_vision.invoke(messages)
+
+        return {
+            "messages": [response],
+            "context": response.content,
+            "next_node": "end",
+        }
+
+    except Exception as e:
+        logger.error(f"Vision Agent Node Error: {str(e)}")
+        return {
+            "messages": [
+                HumanMessage(
+                    content=f"Failed to process visual data accurately: {str(e)}"
+                )
+            ],
+            "next_node": "end",
+        }
