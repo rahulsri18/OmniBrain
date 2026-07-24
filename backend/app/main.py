@@ -1,14 +1,13 @@
 import asyncio
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
-
 from app.services.session_manager import session_manager
 from app.utils.stream_formatter import stream_formatter
-
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
+
 
 app = FastAPI(title="OmniBrain Backend", version="0.1.0")
 
@@ -22,8 +21,20 @@ app.add_middleware(
 
 ingestion_service = IngestionService()
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+REQUEST_TIMEOUT = 30 #seconds
 
 
+@app.middleware("http")
+async def timeout_middleware (request, call_next):
+    try:
+        response = await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT)
+        return response
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Request timed out. Please try again."},
+        )
+        
 @app.get("/")
 def home():
     return {"message": "Server is running"}
