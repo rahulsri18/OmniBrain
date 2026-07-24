@@ -12,6 +12,7 @@ import torch
 from transformers import CLIPProcessor, CLIPModel
 
 from .embedding import EmbeddingGenerator
+from .deduplication import TextDeduplicator
 from .retrieval_filter import RetrievalFilter
 from ..vectordb.qdrant_client import QdrantDB
 from ..logger import logger
@@ -40,6 +41,7 @@ class HybridRetriever:
         self.clip_model.to(self.device)
 
         self.retrieval_filter = RetrievalFilter()
+        self.deduplicator = TextDeduplicator()
 
         # Qdrant DB client (single instance can query multiple collections)
         self.db = QdrantDB()
@@ -141,8 +143,12 @@ class HybridRetriever:
         raw_text_matches = self.search_text(query, top_k=top_k_text)
         raw_image_matches = self.search_images(query, top_k=top_k_images)
 
-        text_matches = self.retrieval_filter.filter_results(raw_text_matches)
-        image_matches = self.retrieval_filter.filter_results(raw_image_matches)
+        text_matches = self.deduplicator.deduplicate(
+            self.retrieval_filter.filter_results(raw_text_matches)
+        )
+        image_matches = self.deduplicator.deduplicate(
+            self.retrieval_filter.filter_results(raw_image_matches)
+        )
 
         # Merge by score (if available) into a single list for convenience.
         merged = []
@@ -150,6 +156,8 @@ class HybridRetriever:
             merged.append({"type": "text", **t})
         for im in image_matches:
             merged.append({"type": "image", **im})
+
+        merged = self.deduplicator.deduplicate(merged)
 
         # Sort by score (descending). Missing scores go to the end.
         merged_sorted = sorted(
