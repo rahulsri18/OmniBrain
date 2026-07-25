@@ -38,23 +38,31 @@ def render_chat():
         )
 
         st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": response,
-            }
-        )
+    {
+        "role": "assistant",
+        "content": response,
+    }
+)
 
         with st.chat_message("assistant", avatar="🤖"):
-         st.markdown(response)
 
-         with st.expander("🧠 Agent Reasoning"):
+            st.markdown(response)
 
-            st.markdown("### Execution Steps")
- 
-            st.success("✅ Question received")
+        with st.expander("🧠 Agent Reasoning", expanded=False):
 
-            st.success("✅ Retrieved relevant document chunks")
+            reasoning_steps = [
+            ("Question received", "✅"),
+            ("Analyzing user query", "🔍"),
+            ("Retrieved relevant document chunks", "📄"),
+            ("Generated final response", "🤖"),
+        ]
 
-            st.success("✅ Generated final response")
+        for step, icon in reasoning_steps:
+            st.markdown(f"{icon} {step}")
 
-            st.info("Backend reasoning stream will be connected in future milestones.")
+        st.divider()
+
+        st.caption(
+            "This reasoning panel currently displays placeholder execution steps. "
+            "Live LangGraph reasoning will be integrated in future milestones."
+        )
