@@ -1,0 +1,17 @@
+[
+    {
+        "image": "tests/data/sample_chart.png",
+        "question": "Summarize this chart.",
+        "ground_truth": "Revenue increased steadily from January to March."
+    },
+{
+       "image": "tests/data/sample_bar_chart.png",
+       "question": "Which category has the highest sales?",
+       "ground_truth": "Electronics"
+   },
+    {
+        "image": "tests/data/sample_pie_chart.png",
+        "question": "Which section occupies the largest area?",
+        "ground_truth": "Sales occupies the largest section with 40 percent."
+    }
+]
