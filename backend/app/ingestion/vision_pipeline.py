@@ -1,4 +1,5 @@
 import os
+import re
 import torch
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
@@ -60,6 +61,17 @@ class VisionIngestionPipeline:
             logger.error(f"Error generating CLIP embedding for {image_path}: {str(e)}")
             return []
 
+    def _extract_page_number(self, image_path: str) -> int | None:
+        """Infer the source PDF page from the extracted image filename when available."""
+        match = re.search(r"_p(\d+)_img\d+", os.path.basename(image_path))
+        if not match:
+            return None
+
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+
     def ingest_extracted_images(self, image_paths: list, original_pdf_name: str):
         """
         Day 4: इमेज वेक्टर्स और मेटाडेटा को M2 के Qdrant स्क्रिप्ट के ज़रिए डेटाबेस में स्टोर करना।
@@ -76,14 +88,20 @@ class VisionIngestionPipeline:
         for idx, img_path in enumerate(image_paths):
             vector = self.generate_image_embedding(img_path)
             if vector:
+                page_number = self._extract_page_number(img_path)
                 embeddings.append(vector)
                 valid_paths.append(img_path)
-                metadata.append({
+                payload = {
                     "file_name": original_pdf_name,
                     "asset_path": img_path,
                     "asset_index": idx + 1,
                     "type": "chart_or_image"
-                })
+                }
+
+                if page_number is not None:
+                    payload["page"] = page_number
+
+                metadata.append(payload)
 
         if not embeddings:
             return

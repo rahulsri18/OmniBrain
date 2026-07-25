@@ -49,29 +49,73 @@ class IngestionPipeline:
         # =========================================================
         print("\n--- Processing Text Content ---")
         parser = PDFParser(str(pdf_path))
-        text = parser.extract_text()
+        chunks = []
+        metadata = []
 
-        if not text or not text.strip():
-            print("No text found in PDF. Skipping text embedding phase.")
-        else:
-            # टेक्स्ट को चंक्स में बदलो
-            chunks = self.chunker.split_text(text)
+        pagewise_text = None
+        try:
+            pagewise_text = parser.extract_pagewise_text()
+        except Exception:
+            pagewise_text = None
+
+        if isinstance(pagewise_text, list) and pagewise_text:
+            chunk_index = 0
+
+            for page_entry in pagewise_text:
+                if not isinstance(page_entry, dict):
+                    continue
+
+                page_number = page_entry.get("page")
+                page_text = page_entry.get("text", "")
+
+                if not page_text or not page_text.strip():
+                    continue
+
+                page_chunks = self.chunker.split_text(page_text)
+
+                for chunk in page_chunks:
+                    chunk_index += 1
+                    chunks.append(chunk)
+
+                    page_metadata = {
+                        "file_name": pdf_path.name,
+                        "chunk": chunk_index,
+                        "text": chunk,
+                        "type": "text",
+                    }
+
+                    if page_number is not None:
+                        page_metadata["page"] = page_number
+
+                    metadata.append(page_metadata)
+
+        if not chunks:
+            text = parser.extract_text()
+
+            if not text or not text.strip():
+                print("No text found in PDF. Skipping text embedding phase.")
+            else:
+                # टेक्स्ट को चंक्स में बदलो
+                chunks = self.chunker.split_text(text)
+                print(f"Generated {len(chunks)} text chunks.")
+
+                # मेटाडेटा तैयार करो
+                metadata = [
+                    {
+                        "file_name": pdf_path.name,
+                        "chunk": i + 1,
+                        "text": chunk,
+                        "type": "text"
+                    }
+                    for i, chunk in enumerate(chunks)
+                ]
+
+        if chunks:
             print(f"Generated {len(chunks)} text chunks.")
 
             # एम्बेडिंग्स जनरेट करो (SentenceTransformers - 384 dim)
             embeddings = self.embedder.generate_embeddings(chunks)
             print(f"Generated {len(embeddings)} text embeddings.")
-
-            # मेटाडेटा तैयार करो
-            metadata = [
-                {
-                    "file_name": pdf_path.name,
-                    "chunk": i + 1,
-                    "text": chunk,
-                    "type": "text"
-                }
-                for i, chunk in enumerate(chunks)
-            ]
 
             # Qdrant के टेक्स्ट कलेक्शन में सेव करो
             print("Saving text vectors into Qdrant...")
