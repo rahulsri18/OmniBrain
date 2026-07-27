@@ -163,11 +163,77 @@ def test_metadata_generation(
     assert metadata[0]["chunk"] == 1
     assert metadata[0]["type"] == "text"
     assert metadata[0]["text"] == "Chunk A"
+    assert metadata[0]["page_number"] == 1
 
     assert metadata[1]["file_name"] == "sample.pdf"
     assert metadata[1]["chunk"] == 2
     assert metadata[1]["type"] == "text"
     assert metadata[1]["text"] == "Chunk B"
+    assert metadata[1]["page_number"] == 2
+
+#TEST CASE 4B: Page-wise Metadata Generation
+
+@patch("app.ingestion.ingestion.PDFParser")
+@patch("app.ingestion.ingestion.VisionIngestionPipeline")
+@patch("app.ingestion.ingestion.PDFVisionExtractor")
+@patch("app.ingestion.ingestion.QdrantDB")
+@patch("app.ingestion.ingestion.EmbeddingGenerator")
+@patch("app.ingestion.ingestion.TextChunker")
+def test_pagewise_metadata_generation(
+    mock_chunker,
+    mock_embedder,
+    mock_db,
+    mock_extractor,
+    mock_vision,
+    mock_parser,
+    tmp_path,
+):
+    pdf = tmp_path / "sample.pdf"
+    pdf.write_text("dummy")
+
+    parser = MagicMock()
+    parser.extract_pagewise_text.return_value = [
+        {"page": 1, "text": "Page One text"},
+        {"page": 2, "text": "Page Two text"},
+    ]
+    parser.extract_text.return_value = ""
+    mock_parser.return_value = parser
+
+    mock_chunker.return_value.split_text.side_effect = [
+        ["Chunk 1"],
+        ["Chunk 2", "Chunk 3"],
+    ]
+
+    mock_embedder.return_value.generate_embeddings.return_value = [
+        [0.1] * 384,
+        [0.2] * 384,
+        [0.3] * 384,
+    ]
+
+    mock_extractor.return_value.extract_images_from_pdf.return_value = []
+
+    pipeline = IngestionPipeline()
+    pipeline.ingest_pdf(str(pdf))
+
+    assert pipeline.chunker.split_text.call_count == 2
+
+    kwargs = pipeline.db.insert_vectors.call_args.kwargs
+    metadata = kwargs["metadata"]
+
+    assert metadata[0]["page"] == 1
+    assert metadata[0]["page_number"] == 1
+    assert metadata[0]["chunk"] == 1
+    assert metadata[0]["text"] == "Chunk 1"
+
+    assert metadata[1]["page"] == 2
+    assert metadata[1]["page_number"] == 2
+    assert metadata[1]["chunk"] == 2
+    assert metadata[1]["text"] == "Chunk 2"
+
+    assert metadata[2]["page"] == 2
+    assert metadata[2]["page_number"] == 2
+    assert metadata[2]["chunk"] == 3
+    assert metadata[2]["text"] == "Chunk 3"
 
 #TEST CASE 5: Multiple Chunks Handling
 @patch("app.ingestion.ingestion.PDFParser")
