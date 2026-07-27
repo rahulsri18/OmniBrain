@@ -48,12 +48,23 @@ def render_chat():
 
             st.markdown(response)
 
+    # Placeholder image returned by the Vision Agent
+            vision_image = "https://placehold.co/700x350/png?text=Vision+Agent+Output"
+
+            st.image(
+                vision_image,
+                caption="Image referenced by the Vision Agent",
+                width=500,
+        )
+
+
         with st.expander("🧠 Agent Reasoning", expanded=False):
 
             reasoning_steps = [
             ("Question received", "✅"),
             ("Analyzing user query", "🔍"),
             ("Retrieved relevant document chunks", "📄"),
+            ("Vision agent selected an image", "🖼️"),
             ("Generated final response", "🤖"),
         ]
 
