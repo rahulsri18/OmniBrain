@@ -144,3 +144,11 @@ async def chat(request: ChatRequest):
         media_type="text/event-stream",
         headers={"X-Session-ID": session_id},
     )
+    
+@app.get("/api/v1/status")
+async def execution_status():
+    """Live execution status endpoint."""
+    return{
+        "status": "grading",
+        "message": "Document grading is in progress."
+    }
