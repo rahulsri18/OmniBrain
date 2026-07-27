@@ -163,11 +163,13 @@ def test_metadata_generation(
     assert metadata[0]["chunk"] == 1
     assert metadata[0]["type"] == "text"
     assert metadata[0]["text"] == "Chunk A"
+    assert metadata[0]["page_number"] == 1
 
     assert metadata[1]["file_name"] == "sample.pdf"
     assert metadata[1]["chunk"] == 2
     assert metadata[1]["type"] == "text"
     assert metadata[1]["text"] == "Chunk B"
+    assert metadata[1]["page_number"] == 2
 
 #TEST CASE 4B: Page-wise Metadata Generation
 
@@ -219,14 +221,17 @@ def test_pagewise_metadata_generation(
     metadata = kwargs["metadata"]
 
     assert metadata[0]["page"] == 1
+    assert metadata[0]["page_number"] == 1
     assert metadata[0]["chunk"] == 1
     assert metadata[0]["text"] == "Chunk 1"
 
     assert metadata[1]["page"] == 2
+    assert metadata[1]["page_number"] == 2
     assert metadata[1]["chunk"] == 2
     assert metadata[1]["text"] == "Chunk 2"
 
     assert metadata[2]["page"] == 2
+    assert metadata[2]["page_number"] == 2
     assert metadata[2]["chunk"] == 3
     assert metadata[2]["text"] == "Chunk 3"
 

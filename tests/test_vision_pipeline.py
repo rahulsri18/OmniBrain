@@ -23,5 +23,6 @@ def test_ingest_extracted_images_adds_page_metadata():
 
     assert metadata[0]["file_name"] == "report.pdf"
     assert metadata[0]["page"] == 7
+    assert metadata[0]["page_number"] == 7
     assert metadata[0]["type"] == "chart_or_image"
     assert metadata[0]["asset_path"].endswith("report_p7_img1.png")

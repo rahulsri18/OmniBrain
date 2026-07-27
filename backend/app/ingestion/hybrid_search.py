@@ -77,6 +77,8 @@ class HybridRetriever:
         query: str,
         top_k: int = 5,
         page: int | None = None,
+        page_number: int | None = None,
+        page_numbers: list[int] | None = None,
         page_range: tuple[int, int] | None = None,
     ) -> List[Dict[str, Any]]:
         """Generate a text embedding and search the text collection."""
@@ -93,6 +95,8 @@ class HybridRetriever:
                 limit=top_k,
                 collection_name=self.text_collection,
                 page=page,
+                page_number=page_number,
+                page_numbers=page_numbers,
                 page_range=page_range,
             )
             return [self._point_to_dict(p) for p in results]
@@ -105,6 +109,8 @@ class HybridRetriever:
         query: str,
         top_k: int = 5,
         page: int | None = None,
+        page_number: int | None = None,
+        page_numbers: list[int] | None = None,
         page_range: tuple[int, int] | None = None,
     ) -> List[Dict[str, Any]]:
         """Generate a CLIP text embedding and search the image collection."""
@@ -141,6 +147,8 @@ class HybridRetriever:
                     limit=top_k,
                     collection_name=self.image_collection,
                     page=page,
+                    page_number=page_number,
+                    page_numbers=page_numbers,
                     page_range=page_range,
                 )
                 return [self._point_to_dict(p) for p in results]
@@ -168,19 +176,26 @@ class HybridRetriever:
         top_k_text: int = 5,
         top_k_images: int = 5,
         page: int | None = None,
+        page_number: int | None = None,
+        page_numbers: list[int] | None = None,
         page_range: tuple[int, int] | None = None,
     ) -> Dict[str, Any]:
         """Run both text and image retrieval and return merged response."""
+        if page_number is None:
+            page_number = page
+
         raw_text_matches = self.search_text(
             query,
             top_k=top_k_text,
-            page=page,
+            page_number=page_number,
+            page_numbers=page_numbers,
             page_range=page_range,
         )
         raw_image_matches = self.search_images(
             query,
             top_k=top_k_images,
-            page=page,
+            page_number=page_number,
+            page_numbers=page_numbers,
             page_range=page_range,
         )
 
@@ -209,7 +224,9 @@ class HybridRetriever:
 
         return {
             "query": query,
-            "page": page,
+            "page": page_number,
+            "page_number": page_number,
+            "page_numbers": page_numbers,
             "page_range": page_range,
             "text_matches": text_matches,
             "image_matches": image_matches,

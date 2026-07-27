@@ -86,6 +86,7 @@ class IngestionPipeline:
 
                     if page_number is not None:
                         page_metadata["page"] = page_number
+                        page_metadata["page_number"] = page_number
 
                     metadata.append(page_metadata)
 

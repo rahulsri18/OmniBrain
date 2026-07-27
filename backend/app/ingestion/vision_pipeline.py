@@ -7,10 +7,12 @@ from app.vectordb.qdrant_client import QdrantDB  # M2 का डेटाबे�
 from app.logger import logger
 
 class VisionIngestionPipeline:
+
     """
     CLIP मॉडल से इमेज एम्बेडिंग्स जनरेट करने और 
     उन्हें Qdrant में स्टोर करने की विज़न पाइपलाइन (Day 3 & Day 4)।
     """
+
     def __init__(self):
         logger.info("Loading HuggingFace CLIP Model (openai/clip-vit-base-patch32)...")
         # Day 3: CLIP Model और Processor लोड करें
@@ -30,6 +32,7 @@ class VisionIngestionPipeline:
         # पक्का करें कि विज़न के लिए Qdrant कलेक्शन तैयार है
         self._ensure_vision_collection()
 
+    
     def _ensure_vision_collection(self):
         """विज़न वेक्टर्स के लिए अलग कलेक्शन बनाना ताकि साइज कॉन्फ्लिक्ट न हो"""
         try:
@@ -41,6 +44,8 @@ class VisionIngestionPipeline:
             logger.info(f"Qdrant Vision collection '{self.collection_name}' initialized with size {self.vector_size}.")
         except Exception as e:
             logger.error(f"Failed to initialize Qdrant Vision collection: {e}")
+
+    
 
     def generate_image_embedding(self, image_path: str) -> list:
         """
@@ -60,7 +65,8 @@ class VisionIngestionPipeline:
         except Exception as e:
             logger.error(f"Error generating CLIP embedding for {image_path}: {str(e)}")
             return []
-
+    
+    
     def _extract_page_number(self, image_path: str) -> int | None:
         """Infer the source PDF page from the extracted image filename when available."""
         match = re.search(r"_p(\d+)_img\d+", os.path.basename(image_path))
@@ -71,6 +77,7 @@ class VisionIngestionPipeline:
             return int(match.group(1))
         except ValueError:
             return None
+    
 
     def ingest_extracted_images(self, image_paths: list, original_pdf_name: str):
         """
@@ -83,6 +90,7 @@ class VisionIngestionPipeline:
         embeddings = []
         valid_paths = []
         metadata = []
+
 
         # 1. सभी इमेजेस के वेक्टर्स और पेलोड तैयार करें
         for idx, img_path in enumerate(image_paths):
@@ -100,6 +108,7 @@ class VisionIngestionPipeline:
 
                 if page_number is not None:
                     payload["page"] = page_number
+                    payload["page_number"] = page_number
 
                 metadata.append(payload)
 

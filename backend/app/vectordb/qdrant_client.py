@@ -116,12 +116,64 @@ class QdrantDB:
         )
         print(f"Successfully inserted {len(points)} vectors into Qdrant.")
 
+    def _build_page_filter(
+        self,
+        page_number: Optional[int] = None,
+        page_numbers: Optional[List[int]] = None,
+        page_range: Optional[tuple[int, int]] = None,
+    ):
+        if page_range is not None:
+            if Filter is None or FieldCondition is None or Range is None:
+                raise RuntimeError(_MISSING_QDRANT_MSG)
+
+            start_page, end_page = page_range
+            return Filter(
+                must=[
+                    FieldCondition(
+                        key="page_number",
+                        range=Range(gte=start_page, lte=end_page),
+                    )
+                ]
+            )
+
+        page_values = list(page_numbers or [])
+        if page_number is not None:
+            page_values.append(page_number)
+
+        if not page_values:
+            return None
+
+        if Filter is None or FieldCondition is None or MatchValue is None:
+            raise RuntimeError(_MISSING_QDRANT_MSG)
+
+        if len(page_values) == 1:
+            return Filter(
+                must=[
+                    FieldCondition(
+                        key="page_number",
+                        match=MatchValue(value=page_values[0]),
+                    )
+                ]
+            )
+
+        return Filter(
+            should=[
+                FieldCondition(
+                    key="page_number",
+                    match=MatchValue(value=value),
+                )
+                for value in page_values
+            ]
+        )
+
     def search(
         self,
         query_embedding,
         limit=5,
         collection_name=None,
         page: Optional[int] = None,
+        page_number: Optional[int] = None,
+        page_numbers: Optional[List[int]] = None,
         page_range: Optional[tuple[int, int]] = None,
     ):
         """
@@ -130,32 +182,14 @@ class QdrantDB:
         if self.client is None:
             raise RuntimeError(_MISSING_QDRANT_MSG)
 
-        query_filter = None
+        if page_number is None:
+            page_number = page
 
-        if page is not None or page_range is not None:
-            if Filter is None or FieldCondition is None or MatchValue is None or Range is None:
-                raise RuntimeError(_MISSING_QDRANT_MSG)
-
-            must_conditions = []
-
-            if page is not None:
-                must_conditions.append(
-                    FieldCondition(
-                        key="page",
-                        match=MatchValue(value=page),
-                    )
-                )
-
-            if page_range is not None:
-                start_page, end_page = page_range
-                must_conditions.append(
-                    FieldCondition(
-                        key="page",
-                        range=Range(gte=start_page, lte=end_page),
-                    )
-                )
-
-            query_filter = Filter(must=must_conditions)
+        query_filter = self._build_page_filter(
+            page_number=page_number,
+            page_numbers=page_numbers,
+            page_range=page_range,
+        )
 
         results = self.client.query_points(
             collection_name=collection_name or self.collection_name,
