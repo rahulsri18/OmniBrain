@@ -108,6 +108,9 @@ async def chat_stream(message: str, session_id: str = None):
             except asyncio.TimeoutError:
                 yield {"type": "error", "content": "Stream response timed out."}
                 break
+            except Exception as e:
+                yield {"type": "error", "content": f"Stream response error: {str(e)}"}
+                break
 
     async for chunk in stream_formatter(event_stream()):
         yield chunk

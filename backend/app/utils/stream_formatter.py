@@ -20,7 +20,7 @@ async def stream_formatter(stream: AsyncGenerator[Any, None]) -> AsyncGenerator[
         elif isinstance(event, dict):
 
             # Ignore internal agent events
-            internal_events = {"tool","debug", "metadata", "internal", "error", "system"}
+            internal_events = {"tool","debug", "metadata", "internal", "system"}
             
             if event.get("type") in internal_events:
                 continue
