@@ -1,33 +1,38 @@
 """
 ingestion.py
 
-End-to-end PDF ingestion pipeline.
+End-to-end Multi-Modal PDF ingestion pipeline.
 
 Workflow:
 PDF
  ↓
-Extract Text
- ↓
-Chunk Text
- ↓
-Generate Embeddings
- ↓
-Store in Qdrant
+├── Extract Text → Chunk Text → Generate Text Embeddings → Store in Qdrant (384-dim)
+↓
+└── Extract Images → Filter Low-Quality → Generate CLIP Embeddings → Store in Qdrant (512-dim)
 """
 
-
+import os
 from pathlib import Path
-from utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
-from app.ingestion.chunker import TextChunker
-from app.ingestion.embedding import EmbeddingGenerator
-from app.vectordb.qdrant_client import QdrantDB
+from ..utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
+from .chunker import TextChunker
+from .embedding import EmbeddingGenerator
+from ..vectordb.qdrant_client import QdrantDB
+
+# 🚀 M4 विज़न मॉड्यूल इम्पोर्ट्स
+from ..utils.vision_extractor import PDFVisionExtractor
+from .vision_pipeline import VisionIngestionPipeline
 
 
 class IngestionPipeline:
-    def _init_(self):
-        self.chunker = TextChunker(chunk_size=1000, chunk_overlap=200)
+    def __init__(self):
+        # M2 और M5 का फिक्स्ड चंकर लॉजिक (अब पैरामीटर्स .env से रीड हो रहे हैं)
+        self.chunker = TextChunker()
         self.embedder = EmbeddingGenerator()
         self.db = QdrantDB()  # यह अपने आप .env से 384 साइज़ उठा लेगा
+
+        # 🚀 M4 विज़न पाइपलाइन कंपोनेंट्स को इनिशियलाइज़ किया
+        self.vision_extractor = PDFVisionExtractor()
+        self.vision_pipeline = VisionIngestionPipeline()
 
     def ingest_pdf(self, pdf_path: str):
         pdf_path = Path(pdf_path)
@@ -35,43 +40,112 @@ class IngestionPipeline:
         if not pdf_path.exists():
             raise FileNotFoundError(f"{pdf_path} not found.")
 
-        # PDF से टेक्स्ट निकालो
-        parser = PDFParser(str(pdf_path))
-        text = parser.extract_text()
-        
         print("=" * 60)
         print("Starting PDF Ingestion Pipeline")
         print("=" * 60)
 
-        if not text.strip():
-            print("No text found in PDF.")
-            return
+        # =========================================================
+        # 📝 भाग 1: टेक्स्ट इनजेशन फ्लो (Text Ingestion Flow)
+        # =========================================================
+        print("\n--- Processing Text Content ---")
+        parser = PDFParser(str(pdf_path))
+        chunks = []
+        metadata = []
 
-        # टेक्स्ट को चंक्स में बदलो
-        chunks = self.chunker.split_text(text)
-        print(f"Generated {len(chunks)} chunks.")
+        pagewise_text = None
+        try:
+            pagewise_text = parser.extract_pagewise_text()
+        except Exception:
+            pagewise_text = None
 
-        # एम्बेडिंग्स जनरेट करो (SentenceTransformers)
-        embeddings = self.embedder.generate_embeddings(chunks)
-        print(f"Generated {len(embeddings)} embeddings.")
+        if isinstance(pagewise_text, list) and pagewise_text:
+            chunk_index = 0
 
-        # मेटाडेटा तैयार करो
-        metadata = [
-            {
-                "file_name": pdf_path.name,
-                "chunk": i + 1,
-                "text": chunk
-            }
-            for i, chunk in enumerate(chunks)
-        ]
+            for page_entry in pagewise_text:
+                if not isinstance(page_entry, dict):
+                    continue
 
-        # Qdrant में सेव करो
-        print("Saving vectors into Qdrant...")
-        self.db.insert_vectors(
-            chunks=chunks,
-            embeddings=embeddings,
-            metadata=metadata,
-        )
+                page_number = page_entry.get("page")
+                page_text = page_entry.get("text", "")
 
-        print("\nIngestion Completed Successfully!")
+                if not page_text or not page_text.strip():
+                    continue
+
+                page_chunks = self.chunker.split_text(page_text)
+
+                for chunk in page_chunks:
+                    chunk_index += 1
+                    chunks.append(chunk)
+
+                    page_metadata = {
+                        "file_name": pdf_path.name,
+                        "chunk": chunk_index,
+                        "text": chunk,
+                        "type": "text",
+                    }
+
+                    if page_number is not None:
+                        page_metadata["page"] = page_number
+                        page_metadata["page_number"] = page_number
+
+                    metadata.append(page_metadata)
+
+        if not chunks:
+            text = parser.extract_text()
+
+            if not text or not text.strip():
+                print("No text found in PDF. Skipping text embedding phase.")
+            else:
+                # टेक्स्ट को चंक्स में बदलो
+                chunks = self.chunker.split_text(text)
+                print(f"Generated {len(chunks)} text chunks.")
+
+                # मेटाडेटा तैयार करो
+                metadata = [
+                    {
+                        "file_name": pdf_path.name,
+                        "chunk": i + 1,
+                        "text": chunk,
+                        "type": "text"
+                    }
+                    for i, chunk in enumerate(chunks)
+                ]
+
+        if chunks:
+            print(f"Generated {len(chunks)} text chunks.")
+
+            # एम्बेडिंग्स जनरेट करो (SentenceTransformers - 384 dim)
+            embeddings = self.embedder.generate_embeddings(chunks)
+            print(f"Generated {len(embeddings)} text embeddings.")
+
+            # Qdrant के टेक्स्ट कलेक्शन में सेव करो
+            print("Saving text vectors into Qdrant...")
+            self.db.insert_vectors(
+                chunks=chunks,
+                embeddings=embeddings,
+                metadata=metadata,
+            )
+            print("Text content successfully stored.")
+
+        # =========================================================
+        # 🚀 भाग 2: विज़न इनजेशन फ्लो (M4 Vision Ingestion Flow)
+        # =========================================================
+        print("\n--- Processing Visual Content (Images/Charts) ---")
+        
+        # 1. PDF से इमेज निकालो और लो-क्वालिटी फ़िल्टर करो (Day 2 & Day 5)
+        extracted_images = self.vision_extractor.extract_images_from_pdf(str(pdf_path))
+        print(f"Extracted {len(extracted_images)} high-quality charts/images.")
+
+        # 2. अगर इमेजेस मिली हैं, तो CLIP वेक्टर्स बनाकर स्टोर करो (Day 3 & Day 4)
+        if extracted_images:
+            print("Processing image features via CLIP and saving to Qdrant...")
+            self.vision_pipeline.ingest_extracted_images(
+                image_paths=extracted_images,
+                original_pdf_name=pdf_path.name
+            )
+        else:
+            print("No high-quality images found to process.")
+
+        print("\n" + "=" * 60)
+        print("[Full Multi-Modal Ingestion Completed Successfully!]")
         print("=" * 60)
