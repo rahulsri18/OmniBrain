@@ -1,5 +1,4 @@
 import os
-from unittest import result
 import pytest
 
 if os.getenv("OPENAI_API_KEY"):
@@ -7,10 +6,19 @@ if os.getenv("OPENAI_API_KEY"):
     from agents.nodes import router_node
 
     @pytest.mark.integration
-    def test_real_supervisor():
+    @pytest.mark.parametrize(
+        "question",
+        [
+            "Describe the uploaded image.",
+            "Summarize my uploaded PDF.",
+            "Show total sales by region.",
+            "Hello, how are you?"
+        ]
+    )
+    def test_real_supervisor(question):
 
         state = {
-            "question": "Describe the uploaded image.",
+            "question": question,
             "context": []
         }
 
@@ -24,6 +32,7 @@ if os.getenv("OPENAI_API_KEY"):
             "general"
         }
         assert "context" in result
+
 else:
 
     @pytest.mark.skip(reason="OPENAI_API_KEY not available")
