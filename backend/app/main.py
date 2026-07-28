@@ -152,3 +152,12 @@ async def execution_status():
         "status": "grading",
         "message": "Document grading is in progress."
     }
+    
+@app.get("/api/v1/telemetry")
+async def telemetry():
+    """ Telemetry endpoint for query rewrite statistics."""
+    return {
+        "query_rewrites": 3,
+        "status": "tracking",
+        "message": "Query rewrite telemetry is active."
+    }
