@@ -190,3 +190,55 @@ def vision_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             ],
             "next_node": "end",
         }
+# agents/nodes/vision.py (or agents/vision_node.py)
+import cv2
+import numpy as np
+from agents.state import AgentState
+
+def detect_blur(image_path: str, threshold: float = 100.0) -> bool:
+    """
+    Computes the Laplacian variance of the image.
+    If variance is below the threshold, the image is considered blurry.
+    """
+    try:
+        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            return True  # Treat unreadable images as error
+        
+        variance = cv2.Laplacian(image, cv2.CV_64F).var()
+        return variance < threshold
+    except Exception:
+        return True
+
+def vision_node(state: AgentState) -> Dict[str, Any]:
+    file_path = state.get("file_path")
+
+    # Check 1: Ensure image exists
+    if not file_path:
+        return {
+            "image_error": True,
+            "image_error_message": "No image file provided for vision processing."
+        }
+
+    # Check 2: Blur Detection
+    if detect_blur(file_path, threshold=80.0):
+        return {
+            "image_error": True,
+            "image_error_message": "Image is too blurry or table content is unclear. Please provide a higher-resolution document."
+        }
+
+    # Proceed with main vision model processing if clear
+    try:
+        # Example processing / LLM call:
+        # response = vision_llm.invoke(...)
+        
+        return {
+            "image_error": False,
+            "image_error_message": None,
+            "messages": state.get("messages", []) + [{"role": "assistant", "content": "Vision processing completed successfully."}]
+        }
+    except Exception as e:
+        return {
+            "image_error": True,
+            "image_error_message": f"Vision processing failed: {str(e)}"
+        }
