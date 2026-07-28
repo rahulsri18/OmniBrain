@@ -135,3 +135,20 @@ workflow.add_node("fallback", fallback_node)
 workflow.set_entry_point("fallback")  # Update to your entry point (e.g., supervisor)
 
 app_graph = workflow.compile()
+# agents/graph.py
+
+def vision_router(state: AgentState) -> str:
+    """Decides whether to proceed or trigger fallback based on image error flag."""
+    if state.get("image_error"):
+        return "fallback_node"  # Route to fallback/error handler
+    return "grader_node"        # Proceed to next step
+
+# Attach conditional edge after vision_node
+workflow.add_conditional_edges(
+    "vision_node",
+    vision_router,
+    {
+        "fallback_node": "fallback_node",
+        "grader_node": "grader_node"
+    }
+)
