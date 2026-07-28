@@ -1,5 +1,6 @@
 import asyncio
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+import json
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -109,7 +110,7 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
                 kind = event.get("event")
                 name = event.get("name", "")
 
-                if kind == "on_chain_start" and name in ["supervisor", "rag_node", "sql_node", "vision_node"]:
+                if kind == "on_chain_start" and name in ["supervisor", "rag_node", "sql_node", "vision_node", "grader_node", "rewrite_node"]:
                     yield {"type": "reasoning", "thought": f"Executing node: {name}", "node": name}
 
                 elif kind == "on_chat_model_stream":
@@ -144,20 +145,57 @@ async def chat(request: ChatRequest):
         media_type="text/event-stream",
         headers={"X-Session-ID": session_id},
     )
-    
+
+
 @app.get("/api/v1/status")
 async def execution_status():
     """Live execution status endpoint."""
-    return{
+    return {
         "status": "grading",
         "message": "Document grading is in progress."
     }
-    
+
+
 @app.get("/api/v1/telemetry")
-async def telemetry():
-    """ Telemetry endpoint for query rewrite statistics."""
+async def telemetry(session_id: str = Query(None, description="Optional session ID to fetch rewrite metrics")):
+    """Telemetry endpoint for query rewrite statistics."""
+    
+    # Session ID दिया है तो session_manager से रियल रिराइट काउंट उठाएगा
+    if session_id:
+        session = session_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        rewrite_count = session.get("rewrite_count", 0)
+        return {
+            "session_id": session_id,
+            "query_rewrites": rewrite_count,
+            "status": "tracking",
+            "message": f"Query rewrite count retrieved for session {session_id}."
+        }
+
+    # अगर session_id नहीं दिया तो global / default Response देगा
     return {
-        "query_rewrites": 3,
+        "query_rewrites": 0,
         "status": "tracking",
         "message": "Query rewrite telemetry is active."
     }
+    # Inside your existing main.py stream generator function:
+
+async def stream_agent_response(user_input: str):
+    try:
+        # 1. Existing execution call
+        async for event in app_graph.astream_events(
+            {"messages": [("user", user_input)]}, 
+            version="v2"
+        ):
+            # Your existing event handling logic here...
+            yield f"data: {json.dumps(event)}\n\n"
+
+    except asyncio.TimeoutError:
+        # Fallback stream event for timeouts
+        yield f"data: {json.dumps({'type': 'error', 'content': 'Request timed out.'})}\n\n"
+
+    except Exception as e:
+        # Fallback stream event for uncaught graph errors
+        yield f"data: {json.dumps({'type': 'error', 'content': f'Execution error: {str(e)}'})}\n\n"

@@ -88,3 +88,50 @@ from agents.vision_node import vision_node
 
 # Add Node to LangGraph StateGraph
 workflow.add_node("vision_node", vision_node)
+"""
+backend/app/agents/graph.py
+
+LangGraph state machine with conditional routing and explicit error state fallback.
+"""
+
+from typing import Any, Dict, TypedDict
+from langgraph.graph import END, StateGraph
+
+# pyrefly: ignore [missing-import]
+from agents.nodes.fallback import fallback_node
+
+
+class GraphState(TypedDict):
+    messages: list
+    session_id: str
+    question: str
+    error: str
+    next_step: str
+    execution_status: str
+
+
+def route_next_step(state: GraphState) -> str:
+    """Conditional router that intercepts errors and redirects to the fallback node."""
+    if state.get("error") or state.get("next_step") == "fallback_node":
+        return "fallback"
+    
+    # Example routing logic for regular flow
+    next_step = state.get("next_step", "end")
+    if next_step == "end":
+        return END
+    return next_step
+
+
+# Build Workflow
+workflow = StateGraph(GraphState)
+
+# Add Fallback Node
+workflow.add_node("fallback", fallback_node)
+
+# Example: Linking nodes (replace with your real nodes)
+# workflow.add_node("grader", grader_node)
+# workflow.add_conditional_edges("grader", route_next_step, {"fallback": "fallback", "end": END})
+
+workflow.set_entry_point("fallback")  # Update to your entry point (e.g., supervisor)
+
+app_graph = workflow.compile()
