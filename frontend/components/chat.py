@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 
 
 def render_chat():
@@ -22,27 +23,43 @@ def render_chat():
 
     if prompt:
 
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": prompt,
-            }
+    # Store user message
+     st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt,
+        }
+    )
+
+     with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
+
+    # Placeholder assistant response
+     response = (
+        "This is a placeholder response from OmniBrain.\n\n"
+        "Backend integration with the LangGraph agent will be connected in the next milestone."
+    )
+
+     st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": response,
+        }
+    )
+
+     with st.chat_message("assistant", avatar="🤖"):
+
+        status = st.status(
+            "🟡 Grading retrieved documents...",
+            expanded=False,
         )
 
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(prompt)
+        with st.spinner("Analyzing retrieved context..."):
+            time.sleep(2)
 
-        response = (
-            "This is a placeholder response from OmniBrain.\n\n"
-            "Backend integration with the LangGraph agent will be connected in the next milestone."
+        status.update(
+            label="✅ Document grading completed",
+            state="complete",
         )
 
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": response,
-            }
-        )
-
-        with st.chat_message("assistant", avatar="🤖"):
-            st.markdown(response)
+        st.markdown(response)
