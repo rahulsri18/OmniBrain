@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 
 
 def apply_chat_styles():
@@ -26,96 +27,113 @@ def render_chat():
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display previous messages with their saved reasoning
+    # Display previous chat history
     for message in st.session_state.messages:
+
         avatar = "👤" if message["role"] == "user" else "🤖"
 
         with st.chat_message(message["role"], avatar=avatar):
+
             st.markdown(message["content"])
 
-            # Render Saved Reasoning in Expander if available
+            # Show image if available
+            if message["role"] == "assistant" and "image" in message:
+                st.image(
+                    message["image"],
+                    caption="Image referenced by the Vision Agent",
+                    width=500,
+                )
+
+            # Show reasoning if available
             if message["role"] == "assistant" and "reasoning" in message:
-                with st.expander("🧠 Agent Reasoning Process"):
-                    st.markdown("### Execution Steps")
-                    for step in message["reasoning"]:
-                        st.success(f"✅ {step}")
+
+                with st.expander("🧠 Agent Reasoning", expanded=False):
+
+                    for step, icon in message["reasoning"]:
+                        st.markdown(f"{icon} {step}")
+
+                    st.divider()
+
+                    st.caption(
+                        "This reasoning panel currently displays placeholder execution steps. "
+                        "Live LangGraph reasoning will be integrated in future milestones."
+                    )
 
     # Chat input
     prompt = st.chat_input("Ask OmniBrain anything...")
 
     if prompt:
-        # 1. User Message
-        st.session_state.messages.append({"role": "user", "content": prompt})
+
+        # User message
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
 
-        # 2. Assistant Response + Reasoning Mock Payload
-        response_text = (
-            "This is a placeholder response from OmniBrain.\n\n"
-            "Backend integration with the LangGraph agent will be connected in the next milestone."
-        )
-
-        st.session_state.messages.append(
-    {
-        "role": "assistant",
-        "content": response,
-    }
-)
-
+        # Day 11 - Document grading status
         with st.chat_message("assistant", avatar="🤖"):
+
+            status = st.status(
+                "🟡 Grading retrieved documents...",
+                expanded=False,
+            )
+
+            with st.spinner("Analyzing retrieved context..."):
+                time.sleep(2)
+
+            status.update(
+                label="✅ Document grading completed",
+                state="complete",
+            )
+
+            response = (
+                "This is a placeholder response from OmniBrain.\n\n"
+                "Backend integration with the LangGraph agent will be connected in the next milestone."
+            )
 
             st.markdown(response)
 
-    # Placeholder image returned by the Vision Agent
+            # Day 10 - Vision image
             vision_image = "https://placehold.co/700x350/png?text=Vision+Agent+Output"
 
             st.image(
                 vision_image,
                 caption="Image referenced by the Vision Agent",
                 width=500,
-        )
+            )
 
-
-        with st.expander("🧠 Agent Reasoning", expanded=False):
-
+            # Day 9 - Agent reasoning
             reasoning_steps = [
-            ("Question received", "✅"),
-            ("Analyzing user query", "🔍"),
-            ("Retrieved relevant document chunks", "📄"),
-            ("Vision agent selected an image", "🖼️"),
-            ("Generated final response", "🤖"),
-        ]
+                ("Question received", "✅"),
+                ("Analyzing user query", "🔍"),
+                ("Retrieved relevant document chunks", "📄"),
+                ("Vision agent selected an image", "🖼️"),
+                ("Generated final response", "🤖"),
+            ]
 
-        for step, icon in reasoning_steps:
-            st.markdown(f"{icon} {step}")
+            with st.expander("🧠 Agent Reasoning", expanded=False):
 
-        st.divider()
+                for step, icon in reasoning_steps:
+                    st.markdown(f"{icon} {step}")
 
-        st.caption(
-            "This reasoning panel currently displays placeholder execution steps. "
-            "Live LangGraph reasoning will be integrated in future milestones."
+                st.divider()
+
+                st.caption(
+                    "This reasoning panel currently displays placeholder execution steps. "
+                    "Live LangGraph reasoning will be integrated in future milestones."
+                )
+
+        # Save assistant message
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": response,
+                "image": vision_image,
+                "reasoning": reasoning_steps,
+            }
         )
-        
-        reasoning_steps = [
-            "Question received & validated",
-            "Supervisor Node: Query routed to Retriever Engine",
-            "Qdrant Vector DB: Retrieved top matching contexts",
-            "GPT-4o: Synthesized final response"
-        ]
-
-        # Append to session state WITH reasoning
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": response_text,
-            "reasoning": reasoning_steps
-        })
-
-        # Render immediately
-        with st.chat_message("assistant", avatar="🤖"):
-            st.markdown(response_text)
-
-            with st.expander("🧠 Agent Reasoning Process"):
-                st.markdown("### Execution Steps")
-                for step in reasoning_steps:
-                    st.success(f"✅ {step}")
-                st.info("💡 Real-time backend SSE reasoning stream connection ready for Day 9 integration.")
