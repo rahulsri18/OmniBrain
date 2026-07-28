@@ -1,90 +1,27 @@
-# agents/graph.py
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, START, END
+
 from agents.state import GraphState
-from agents.nodes import router_node
+from agents.nodes import (
+    router_node,
+    grader_node,
+    routing_decider,
+)
 
+workflow = StateGraph(GraphState)
 
-def route_query(state: GraphState):
-    return state.get("route", "general")
+workflow.add_node("router", router_node)
+workflow.add_node("grader", grader_node)
 
+workflow.add_edge(START, "router")
+workflow.add_edge("router", "grader")
 
-builder = StateGraph(GraphState)
-
-builder.add_node("router", router_node)
-
-builder.set_entry_point("router")
-
-def route_query(state: GraphState) -> str:
-    """
-    Supervisor routing logic: State से 'route' की वैल्यू रीड करता है।
-    अगर वैल्यू अननोन है या सेट नहीं है, तो सेफली 'end' पर फॉलबैक करता है।
-    """
-    route = state.get("route", "end")
-    
-    # 🚀 सेफ गार्ड: अगर रूट मैपिंग डिक्शनरी में नहीं है तो 'end' पर भेजो
-    valid_routes = ["end"] # आगे चलकर यहाँ "rag", "sql", "general" जुड़ेंगे
-    
-    if route not in valid_routes:
-        return "end"
-        
-    return route
-
-
-# 1. StateGraph इनिशियलाइज़ करें
-builder = StateGraph(GraphState)
-
-# 2. नोड्स रजिस्टर करें
-builder.add_node("router", router_node)
-
-# 3. एंट्री पॉइंट सेट करें
-builder.set_entry_point("router")
-
-# 4. कंडीशनल एज कनेक्ट करें
-builder.add_conditional_edges(
-    "router",
-    route_query,
+workflow.add_conditional_edges(
+    "grader",
+    routing_decider,
     {
-        "retriever": END,
-        "sql": END,
-        "vision": END,
-        "general": END,
-        "end": END,
-        # भविष्य के नोड्स के लिए प्लेसहोलडर (Day 7 में इनेबल होंगे):
-        # "rag": "rag_node",
-        # "sql": "sql_node",
+        "retry": "router",
+        "accept": END,
     },
 )
 
-# 5. ग्राफ कंपाइल करें
-graph = builder.compile()
-"""
-graph.py
-
-LangGraph Workflow Definition & Compiler.
-"""
-
-from langgraph.graph import StateGraph, END
-from typing import TypedDict, List, Dict, Any, Optional
-
-class AgentState(TypedDict):
-    messages: List[Dict[str, Any]]
-    session_id: str
-    file_path: Optional[str]
-    next_node: str
-
-# Define nodes...
-def router_node(state: AgentState):
-    return state
-
-# Build graph
-workflow = StateGraph(AgentState)
-workflow.add_node("router", router_node)
-workflow.set_entry_point("router")
-workflow.add_edge("router", END)
-
-# 🚀 Compile LangGraph workflow
 app_graph = workflow.compile()
-from agents.vision_node import vision_node
-
-# Add Node to LangGraph StateGraph
-workflow.add_node("vision_node", vision_node)
