@@ -1,13 +1,13 @@
 import asyncio
 import json
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile,Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-
 from app.services.session_manager import session_manager
 from app.utils.stream_formatter import stream_formatter
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
+from app.core.exceptions import GuardrailViolation 
 
 # Import compiled graph safely
 try:
@@ -24,6 +24,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(GuardrailViolation)
+async def guardrail_exception_handler(
+    request: Request,
+    exc: GuardrailViolation,
+):
+    """
+    Global handler for blocked guardrail requests.
+    """
+    return JSONResponse(
+        status_code=400,
+        content={
+            "status": "blocked",
+            "message": exc.message,
+        },
+    )
 
 ingestion_service = IngestionService()
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
