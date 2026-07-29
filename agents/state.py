@@ -50,3 +50,21 @@ class AgentState(TypedDict, total=False):
     # Day 11 Addition for Vision Quality Check:
     image_error: Optional[bool]
     image_error_message: Optional[str]
+    """
+agents/state.py
+
+Defines the shared state schema across all agent nodes in LangGraph.
+"""
+
+from typing import Any, Dict, List, TypedDict
+
+
+class GraphState(TypedDict):
+    messages: List[Dict[str, Any]]
+    question: str
+    documents: List[Dict[str, Any]]
+    rewritten_query: str
+    error: str
+    loop_count: int  # Day 12: Tracks retry/rewrite loop executions
+    next_step: str
+    execution_status: str

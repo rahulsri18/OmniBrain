@@ -148,3 +148,74 @@ def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "context": analysis_result,
         "image_error": False,
     }
+"""
+backend/app/agents/nodes/vision_node.py
+
+Vision Sub-Agent execution logic supporting primary vision analysis and Day 12 backup prompt rephrasing.
+"""
+
+from typing import Any, Dict, Optional
+# pyrefly: ignore [missing-import]
+from agents.prompts.vision_prompts import (
+    PRIMARY_VISION_SYSTEM_PROMPT,
+    BACKUP_VISION_SYSTEM_PROMPT,
+    BACKUP_VISION_USER_TEMPLATE,
+)
+
+
+async def execute_vision_agent(
+    image_path: str,
+    question: str,
+    vision_llm: Any,
+    use_backup_rephraser: bool = False,
+    raw_previous_output: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Executes the Vision Agent using either the primary extraction model or 
+    the Day 12 backup rephrasing prompt.
+    """
+    try:
+        if use_backup_rephraser and raw_previous_output:
+            # Day 12 Backup Path: Rephrase existing raw visual text/description
+            user_prompt = BACKUP_VISION_USER_TEMPLATE.format(
+                raw_description=raw_previous_output,
+                question=question
+            )
+            
+            response = await vision_llm.ainvoke([
+                {"role": "system", "content": BACKUP_VISION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ])
+            
+            return {
+                "vision_output": response.content,
+                "is_rephrased": True,
+                "image_error": False,
+            }
+
+        # Primary Path: Direct Multimodal Visual Analysis
+        # (Assuming vision_llm supports vision input with image payload)
+        primary_messages = [
+            {"role": "system", "content": PRIMARY_VISION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": question},
+                    {"type": "image_url", "image_url": {"url": image_path}}
+                ]
+            }
+        ]
+        
+        response = await vision_llm.ainvoke(primary_messages)
+        return {
+            "vision_output": response.content,
+            "is_rephrased": False,
+            "image_error": False,
+        }
+
+    except Exception as exc:
+        return {
+            "vision_output": None,
+            "image_error": True,
+            "image_error_message": f"Vision processing failed: {str(exc)}"
+        }
