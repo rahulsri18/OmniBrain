@@ -34,7 +34,7 @@ def router_node(state: GraphState) -> GraphState:
             state["metadata"] = {}
 
         state["metadata"]["sql_query"] = sql_result["sql_query"]
-        state["context"] = str(sql_result["data"])
+        state["context"] = [str(sql_result["data"])]
         return state
 
     # 2. Retriever (RAG) Route Handling
