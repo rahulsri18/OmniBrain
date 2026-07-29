@@ -57,7 +57,6 @@ pydantic_core==2.46.4
 Pygments==2.20.0
 pypdfium2==5.12.1
 python-dotenv==1.2.2
-pywin32==312
 PyYAML==6.0.3
 qdrant-client==1.18.0
 regex==2026.7.10
@@ -90,9 +89,6 @@ websockets==15.0.1
 xxhash==3.8.1
 zstandard==0.25.0
 pymupdf>=1.24.0      # PDF से इमेजेस एक्सट्रैक्ट करने के लिए
-transformers>=4.40.0 # CLIP Model लोड करने के लिए
-torch>=2.2.0         # Embedding tensors हैंडल करने के लिए
-pillow>=10.0.0       # Image processing के लिए
 asyncio
 aiohttp
 fastapi
