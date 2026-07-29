@@ -41,3 +41,12 @@ def create_initial_state(question: str) -> GraphState:
         "error": None,
         "metadata": {},
     }
+from typing import TypedDict, Optional, List, Dict, Any
+
+class AgentState(TypedDict, total=False):
+    messages: List[Dict[str, Any]]
+    file_path: Optional[str]
+    question: Optional[str]
+    # Day 11 Addition for Vision Quality Check:
+    image_error: Optional[bool]
+    image_error_message: Optional[str]

@@ -12,6 +12,7 @@ import torch
 from transformers import CLIPProcessor, CLIPModel
 
 from .embedding import EmbeddingGenerator
+from .deduplication import TextDeduplicator
 from .retrieval_filter import RetrievalFilter
 from ..vectordb.qdrant_client import QdrantDB
 from ..logger import logger
@@ -40,6 +41,7 @@ class HybridRetriever:
         self.clip_model.to(self.device)
 
         self.retrieval_filter = RetrievalFilter()
+        self.deduplicator = TextDeduplicator()
 
         # Qdrant DB client (single instance can query multiple collections)
         self.db = QdrantDB()
@@ -70,7 +72,15 @@ class HybridRetriever:
 
         return {"id": pid, "payload": payload, "score": score}
 
-    def search_text(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_text(
+        self,
+        query: str,
+        top_k: int = 5,
+        page: int | None = None,
+        page_number: int | None = None,
+        page_numbers: list[int] | None = None,
+        page_range: tuple[int, int] | None = None,
+    ) -> List[Dict[str, Any]]:
         """Generate a text embedding and search the text collection."""
         if not query or not query.strip():
             return []
@@ -80,13 +90,29 @@ class HybridRetriever:
             return []
 
         try:
-            results = self.db.search(query_embedding=emb, limit=top_k, collection_name=self.text_collection)
+            results = self.db.search(
+                query_embedding=emb,
+                limit=top_k,
+                collection_name=self.text_collection,
+                page=page,
+                page_number=page_number,
+                page_numbers=page_numbers,
+                page_range=page_range,
+            )
             return [self._point_to_dict(p) for p in results]
         except Exception as e:
             logger.error(f"Text search failed: {e}")
             return []
 
-    def search_images(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_images(
+        self,
+        query: str,
+        top_k: int = 5,
+        page: int | None = None,
+        page_number: int | None = None,
+        page_numbers: list[int] | None = None,
+        page_range: tuple[int, int] | None = None,
+    ) -> List[Dict[str, Any]]:
         """Generate a CLIP text embedding and search the image collection."""
         if not query or not query.strip():
             return []
@@ -116,7 +142,15 @@ class HybridRetriever:
             emb = text_feats.cpu().numpy()[0].tolist()
 
             try:
-                results = self.db.search(query_embedding=emb, limit=top_k, collection_name=self.image_collection)
+                results = self.db.search(
+                    query_embedding=emb,
+                    limit=top_k,
+                    collection_name=self.image_collection,
+                    page=page,
+                    page_number=page_number,
+                    page_numbers=page_numbers,
+                    page_range=page_range,
+                )
                 return [self._point_to_dict(p) for p in results]
             except Exception as qe:
                 # If the image collection does not exist, create it (empty) so future ingestions can populate it.
@@ -136,13 +170,41 @@ class HybridRetriever:
             logger.error(f"Image search (CLIP) failed: {e}")
             return []
 
-    def retrieve(self, query: str, top_k_text: int = 5, top_k_images: int = 5) -> Dict[str, Any]:
+    def retrieve(
+        self,
+        query: str,
+        top_k_text: int = 5,
+        top_k_images: int = 5,
+        page: int | None = None,
+        page_number: int | None = None,
+        page_numbers: list[int] | None = None,
+        page_range: tuple[int, int] | None = None,
+    ) -> Dict[str, Any]:
         """Run both text and image retrieval and return merged response."""
-        raw_text_matches = self.search_text(query, top_k=top_k_text)
-        raw_image_matches = self.search_images(query, top_k=top_k_images)
+        if page_number is None:
+            page_number = page
 
-        text_matches = self.retrieval_filter.filter_results(raw_text_matches)
-        image_matches = self.retrieval_filter.filter_results(raw_image_matches)
+        raw_text_matches = self.search_text(
+            query,
+            top_k=top_k_text,
+            page_number=page_number,
+            page_numbers=page_numbers,
+            page_range=page_range,
+        )
+        raw_image_matches = self.search_images(
+            query,
+            top_k=top_k_images,
+            page_number=page_number,
+            page_numbers=page_numbers,
+            page_range=page_range,
+        )
+
+        text_matches = self.deduplicator.deduplicate(
+            self.retrieval_filter.filter_results(raw_text_matches)
+        )
+        image_matches = self.deduplicator.deduplicate(
+            self.retrieval_filter.filter_results(raw_image_matches)
+        )
 
         # Merge by score (if available) into a single list for convenience.
         merged = []
@@ -150,6 +212,8 @@ class HybridRetriever:
             merged.append({"type": "text", **t})
         for im in image_matches:
             merged.append({"type": "image", **im})
+
+        merged = self.deduplicator.deduplicate(merged)
 
         # Sort by score (descending). Missing scores go to the end.
         merged_sorted = sorted(
@@ -160,6 +224,10 @@ class HybridRetriever:
 
         return {
             "query": query,
+            "page": page_number,
+            "page_number": page_number,
+            "page_numbers": page_numbers,
+            "page_range": page_range,
             "text_matches": text_matches,
             "image_matches": image_matches,
             "merged": merged_sorted,
