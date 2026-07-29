@@ -64,6 +64,22 @@ def render_chat():
 
     if prompt:
 
+    # Store user message
+     st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt,
+        }
+    )
+
+     with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
+
+    # Placeholder assistant response
+     response = (
+        "This is a placeholder response from OmniBrain.\n\n"
+        "Backend integration with the LangGraph agent will be connected in the next milestone."
+    )
         # User message
         st.session_state.messages.append(
             {
@@ -72,9 +88,29 @@ def render_chat():
             }
         )
 
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(prompt)
+     st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": response,
+        }
+    )
 
+     with st.chat_message("assistant", avatar="🤖"):
+
+        status = st.status(
+            "🟡 Grading retrieved documents...",
+            expanded=False,
+        )
+
+        with st.spinner("Analyzing retrieved context..."):
+            time.sleep(2)
+
+        status.update(
+            label="✅ Document grading completed",
+            state="complete",
+        )
+
+        st.markdown(response)
         # Day 11 - Document grading status
         with st.chat_message("assistant", avatar="🤖"):
 

@@ -27,6 +27,17 @@ def router_node(state: GraphState) -> GraphState:
 
     state["route"] = route
 
+    # SQL Route
+    if route == "sql":
+        sql_query = sql_agent_node(state["question"])
+
+        state.setdefault("metadata", {})
+        state["metadata"]["sql_query"] = sql_query
+
+        return state
+
+    # Retriever / Vision / General Routes
+    raw_documents = retriever_tool(state["question"])
     # 1. SQL Route Handling
     if route == "sql":
         sql_result = sql_agent_node(state["question"])
@@ -44,6 +55,36 @@ def router_node(state: GraphState) -> GraphState:
         state["context"] = clean_context_list
         return state
 
+    state["context"] = clean_context_list
+
+    return state
+
+
+def grader_node(state: GraphState) -> GraphState:
+    """
+    Day 11 - Document Grader Node
+
+    Checks whether the retrieved context is useful.
+    """
+
+    context = state.get("context", [])
+
+    state.setdefault("metadata", {})
+
+    if context and len(context) > 0:
+        state["metadata"]["grade"] = "accept"
+    else:
+        state["metadata"]["grade"] = "retry"
+
+    return state
+
+
+def routing_decider(state: GraphState) -> str:
+    """
+    Decide the next step after grading.
+    """
+
+    return state.get("metadata", {}).get("grade", "accept")
     # 3. Vision / General Fallback
     return state
     """
