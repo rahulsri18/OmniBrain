@@ -14,7 +14,9 @@ class Settings(BaseSettings):
 
     # OpenAI Key (इसे .env से रीड करने के लिए फ़ील्ड सेट किया है)
     OPENAI_API_KEY: str = Field(default="mock-key-for-test")
-
+    # SQL Agent
+    SQL_AGENT_MODEL: str = "gpt-4o"
+    TEMPERATURE: float = 0.0
     # Qdrant DB Config
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None
