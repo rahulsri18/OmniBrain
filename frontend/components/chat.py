@@ -114,10 +114,20 @@ def render_chat():
         # Day 11 - Document grading status
         with st.chat_message("assistant", avatar="🤖"):
 
+    # Day 12 - Query Rewriter
+            st.info(
+        "🔄 Retrying search with optimized query..."
+    )
+
+            st.code(
+        "Compare annual revenue trends from the uploaded financial report.",
+        language="text",
+    )
+
             status = st.status(
-                "🟡 Grading retrieved documents...",
-                expanded=False,
-            )
+        "🟡 Grading retrieved documents...",
+        expanded=False,
+    )
 
             with st.spinner("Analyzing retrieved context..."):
                 time.sleep(2)
@@ -125,23 +135,22 @@ def render_chat():
             status.update(
                 label="✅ Document grading completed",
                 state="complete",
-            )
+    )
 
             response = (
-                "This is a placeholder response from OmniBrain.\n\n"
-                "Backend integration with the LangGraph agent will be connected in the next milestone."
-            )
+        "This is a placeholder response from OmniBrain.\n\n"
+        "Backend integration with the LangGraph agent will be connected in the next milestone."
+    )
 
             st.markdown(response)
 
-            # Day 10 - Vision image
             vision_image = "https://placehold.co/700x350/png?text=Vision+Agent+Output"
 
             st.image(
                 vision_image,
                 caption="Image referenced by the Vision Agent",
                 width=500,
-            )
+    )
 
             # Day 9 - Agent reasoning
             reasoning_steps = [
