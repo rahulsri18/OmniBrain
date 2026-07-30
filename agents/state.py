@@ -26,6 +26,9 @@ class GraphState(TypedDict):
 
     # Additional metadata
     metadata: Dict[str, Any]
+        # Self-RAG retry tracking
+    loop_count: int
+    max_loops: int
 
 
 def create_initial_state(question: str) -> GraphState:
@@ -40,6 +43,9 @@ def create_initial_state(question: str) -> GraphState:
         "route": None,
         "error": None,
         "metadata": {},
+            # Self-RAG retry tracking
+        "loop_count": 0,
+        "max_loops": 3,
     }
 from typing import TypedDict, Optional, List, Dict, Any
 

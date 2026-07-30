@@ -1,5 +1,6 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from backend.app.ingestion.query_transformer import QueryTransformer
 
 from agents.output_parser import parse_retriever_output
 from agents.prompts import SUPERVISOR_SYSTEM_PROMPT
@@ -8,6 +9,8 @@ from agents.state import GraphState
 from backend.app.sql_agent.agent import sql_agent_node
 
 llm = ChatOpenAI(model="gpt-4o", temperature=0)
+transformer = QueryTransformer()
+
 
 
 def router_node(state: GraphState) -> GraphState:
@@ -77,19 +80,40 @@ def grader_node(state: GraphState) -> GraphState:
         state["metadata"]["grade"] = "retry"
 
     return state
+def query_rewriter_node(state: GraphState) -> GraphState:
+    """
+    Day 12 - Query Rewriter Node
 
+    Rewrites the user's query when retrieval quality is poor.
+    """
+
+    result = transformer.transform(
+        original_query=state["question"]
+    )
+
+    # Update rewritten query
+    state["question"] = result.rewritten_query
+
+    # Increment retry count
+    state["loop_count"] += 1
+
+    state.setdefault("metadata", {})
+    state["metadata"]["rewritten"] = not result.used_fallback
+
+    return state
 
 def routing_decider(state: GraphState) -> str:
     """
     Decide the next step after grading.
     """
+    grade = state.get("metadata", {}).get("grade", "accept")
 
-    return state.get("metadata", {}).get("grade", "accept")
-    # 3. Vision / General Fallback
-    return state
-    """
-nodes.py - Example integration for Vision Node with M4 Fallback
-"""
+    if grade == "retry":
+        if state["loop_count"] >= state["max_loops"]:
+             return "accept"
+        return "retry"
+
+    return "accept"
 
 from backend.app.agents.vision_fallback import safe_vision_execution_wrapper, vision_error_handler_node
 from backend.app.logger import logger
@@ -110,3 +134,4 @@ def vision_node(state: dict) -> dict:
 
     state["context"] = f"Successfully extracted vision details from {file_path}"
     return state
+    
