@@ -41,6 +41,7 @@ from langgraph.graph import StateGraph, END
 
 from agents.state import GraphState
 from agents.nodes import router_node
+from agents.guardrail import input_safety_rail_node
 from agents.vision_node import vision_node
 from agents.nodes.fallback import fallback_node
 
@@ -84,6 +85,7 @@ def route_after_vision(state: GraphState) -> str:
 builder = StateGraph(GraphState)
 
 # Register every node exactly once, on the one graph object.
+builder.add_node("input_rail", input_safety_rail_node)
 builder.add_node("supervisor", router_node)
 builder.add_node("vision", vision_node)
 builder.add_node("fallback", fallback_node)
@@ -95,6 +97,7 @@ builder.add_node("fallback", fallback_node)
 # edges at those names instead of END.
 
 builder.set_entry_point("supervisor")
+builder.add_edge("input_rail", "supervisor")
 
 builder.add_conditional_edges(
     "supervisor",
