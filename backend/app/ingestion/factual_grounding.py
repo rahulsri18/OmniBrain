@@ -1,40 +1,62 @@
+""""
+Verifies that a generated answer is actually supported by the retrieved PDF
+context, to catch hallucinations before a response is returned to the user.
+Sits after generation in the pipeline, alongside document_grader.py and
+query_transformer.py in the retrieval-quality layer.
+
+Expected usage:
+
+    from factual_grounding import GroundingVerifier
+
+    verifier = GroundingVerifier(llm_client=my_anthropic_client)
+
+    answer = llm_generate(query, retrieved_chunks)
+    result = verifier.verify(answer=answer, context_chunks=retrieved_chunks)
+
+    if result.grounded:
+        return answer
+    else:
+        # retry generation, or return the answer with a caveat/warning
+        return handle_ungrounded(answer, result)
+"""
+
 import json
 import os
 import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
- 
- 
+
+
 # Bump when GROUNDING_SYSTEM_PROMPT's wording changes meaningfully, same
 # convention as GRADER_PROMPT_VERSION / TRANSFORMER_PROMPT_VERSION.
 GROUNDING_PROMPT_VERSION = "v1.0"
- 
+
 DEFAULT_GROUNDING_MODEL = "claude-sonnet-4-6"
- 
+
 GROUNDING_SYSTEM_PROMPT = """You are a factual grounding verifier for a retrieval-augmented \
 generation (RAG) system.
- 
+
 Your ONLY job is to check whether a generated answer is supported by the \
 retrieved document context it was given. You do NOT answer the user's \
 question yourself. You do NOT use outside knowledge -- judge the answer \
 ONLY against the retrieved context provided to you, even if you know the \
 claim to be true or false from general knowledge.
- 
+
 For each distinct factual claim in the answer, classify it as one of:
 - "supported": the retrieved context contains information that backs up this claim.
 - "unsupported": the retrieved context has no information addressing this claim \
 (treat missing evidence as unsupported, not as supported).
 - "contradicted": the retrieved context directly conflicts with this claim.
- 
+
 Then produce an overall judgment:
 - "grounded" is true only if all claims are supported (no unsupported or \
 contradicted claims).
 - "grounding_score" is a float from 0.0 to 1.0 representing the proportion \
 of claims that are supported.
- 
+
 Respond with ONLY a JSON object in this exact format, and nothing else:
- 
+
 {
   "grounded": true or false,
   "grounding_score": <float between 0.0 and 1.0>,
@@ -43,21 +65,22 @@ Respond with ONLY a JSON object in this exact format, and nothing else:
   "contradicted_claims": ["<claim text>", ...],
   "explanation": "<one or two sentence summary of the verification>"
 }
- 
+
 Do not include markdown code fences, preamble, or any text outside the JSON object.
 If the answer contains no verifiable factual claims (e.g. it's a clarifying \
 question or a refusal), return grounded=true, grounding_score=1.0, and empty \
 claim lists, with an explanation noting there were no claims to verify.
 """
- 
+
 GROUNDING_USER_TEMPLATE = """Generated Answer:
 {answer}
- 
+
 Retrieved Context:
 {context}
 """
- 
+
 NO_CONTEXT_PLACEHOLDER = "(no context was retrieved)"
+
 
 @dataclass
 class GroundingResult:
@@ -69,19 +92,19 @@ class GroundingResult:
     explanation: str = ""
     ungraded: bool = False  # True if verification failed after retries (transient error)
     prompt_version: str = GROUNDING_PROMPT_VERSION
- 
- 
+
+
 class GroundingVerifier:
     """
     Wraps an LLM client to verify that a generated answer is grounded in
     retrieved context.
- 
+
     llm_client must expose a `.messages.create(...)`-style method matching
     the Anthropic Python SDK, or you can pass a custom `call_fn` that takes
     (system_prompt, user_prompt) -> str (raw model text) and handles the
     actual API call however you like.
     """
- 
+
     def __init__(
         self,
         llm_client: Any = None,
@@ -97,7 +120,7 @@ class GroundingVerifier:
             raise ValueError("Provide either llm_client or call_fn")
         if on_ungraded not in ("not_grounded", "grounded", "raise"):
             raise ValueError("on_ungraded must be 'not_grounded', 'grounded', or 'raise'")
- 
+
         self.llm_client = llm_client
         self.model = model or os.environ.get("GROUNDING_MODEL", DEFAULT_GROUNDING_MODEL)
         self.call_fn = call_fn
@@ -107,8 +130,8 @@ class GroundingVerifier:
         self.grounded_score_threshold = grounded_score_threshold
         self.on_ungraded = on_ungraded
 
-         # --- context handling -------------------------------------------------
- 
+    # --- context handling -------------------------------------------------
+
     @staticmethod
     def _flatten_context(context_chunks: Any) -> str:
         """
@@ -118,10 +141,10 @@ class GroundingVerifier:
         """
         if context_chunks is None:
             return NO_CONTEXT_PLACEHOLDER
- 
+
         if isinstance(context_chunks, str):
             return context_chunks.strip() or NO_CONTEXT_PLACEHOLDER
- 
+
         if isinstance(context_chunks, list):
             parts = []
             for i, chunk in enumerate(context_chunks, start=1):
@@ -142,20 +165,20 @@ class GroundingVerifier:
                 if text:
                     parts.append(f"[Chunk {i}]\n{text}")
             return "\n\n".join(parts) if parts else NO_CONTEXT_PLACEHOLDER
- 
+
         return str(context_chunks).strip() or NO_CONTEXT_PLACEHOLDER
 
     # --- LLM call with retry ----------------------------------------------
- 
+
     def _call_llm(self, answer: str, context_text: str) -> str:
         user_prompt = GROUNDING_USER_TEMPLATE.format(answer=answer, context=context_text)
- 
+
         last_error: Optional[Exception] = None
         for attempt in range(self.max_retries + 1):
             try:
                 if self.call_fn is not None:
                     return self.call_fn(GROUNDING_SYSTEM_PROMPT, user_prompt)
- 
+
                 kwargs: Dict[str, Any] = dict(
                     model=self.model,
                     max_tokens=600,
@@ -164,7 +187,7 @@ class GroundingVerifier:
                 )
                 if self.request_timeout is not None:
                     kwargs["timeout"] = self.request_timeout
- 
+
                 response = self.llm_client.messages.create(**kwargs)
                 for block in response.content:
                     if getattr(block, "type", None) == "text":
@@ -177,59 +200,79 @@ class GroundingVerifier:
                     continue
                 raise last_error
 
-             # --- parsing ------------------------------------------------------------
- 
+    # --- parsing ------------------------------------------------------------
+
     @staticmethod
     def _coerce_str_list(value: Any) -> List[str]:
         if not isinstance(value, list):
             return []
         return [str(item) for item in value if str(item).strip()]
- 
+
+    @staticmethod
+    def _coerce_bool(value: Any) -> bool:
+        """
+        Strictly coerce a JSON-decoded value to bool. Plain `bool(value)`
+        would treat the string "false" as truthy (any non-empty string is
+        truthy in Python), so if the model ever emits "grounded": "false"
+        instead of a JSON boolean literal, a naive bool() cast would
+        silently flip the result. This treats only True and the string
+        "true" (case-insensitive) as true; everything else is false.
+        """
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() == "true"
+
     @classmethod
     def _parse_result(cls, raw_text: str) -> GroundingResult:
         """Robustly parse the model's JSON output, tolerating stray text/fences."""
         cleaned = raw_text.strip()
         cleaned = re.sub(r"^```(json)?", "", cleaned).strip()
         cleaned = re.sub(r"```$", "", cleaned).strip()
- 
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if not match:
+
+        start = cleaned.find("{")
+        if start == -1:
             return GroundingResult(
                 grounded=False,
                 grounding_score=0.0,
                 explanation="unparsable_verifier_output",
             )
- 
+
+        # Use raw_decode from the first "{" instead of a greedy regex spanning
+        # to the LAST "}" in the string. A regex like r"\{.*\}" would swallow
+        # any trailing commentary the model appended after valid JSON (e.g.
+        # a stray brace in a follow-up sentence); raw_decode stops exactly
+        # where the first well-formed JSON object ends.
         try:
-            data = json.loads(match.group(0))
+            data, _ = json.JSONDecoder().raw_decode(cleaned[start:])
         except (json.JSONDecodeError, TypeError):
             return GroundingResult(
                 grounded=False,
                 grounding_score=0.0,
                 explanation="unparsable_verifier_output",
             )
- 
+
         raw_score = data.get("grounding_score", 0.0)
         try:
             score = float(raw_score)
         except (TypeError, ValueError):
             score = 0.0
         score = min(1.0, max(0.0, score))  # clamp, don't trust the model blindly
- 
+
         return GroundingResult(
-            grounded=bool(data.get("grounded", False)),
+            grounded=cls._coerce_bool(data.get("grounded", False)),
             grounding_score=score,
             supported_claims=cls._coerce_str_list(data.get("supported_claims")),
             unsupported_claims=cls._coerce_str_list(data.get("unsupported_claims")),
             contradicted_claims=cls._coerce_str_list(data.get("contradicted_claims")),
             explanation=str(data.get("explanation", "")),
         )
-     # --- public API ----------------------------------------------------------
- 
+
+    # --- public API ----------------------------------------------------------
+
     def verify(self, answer: str, context_chunks: Any) -> GroundingResult:
         """
         Verify whether `answer` is grounded in `context_chunks`.
- 
+
         context_chunks may be a plain string, or a list of chunk dicts/strings
         (matching hybrid_search.py / document_grader.py result shapes).
         """
@@ -239,9 +282,9 @@ class GroundingVerifier:
                 grounding_score=0.0,
                 explanation="empty_answer",
             )
- 
+
         context_text = self._flatten_context(context_chunks)
- 
+
         if context_text == NO_CONTEXT_PLACEHOLDER:
             # No context at all means nothing in the answer can be
             # considered supported -- fail safe rather than assume grounded.
@@ -251,6 +294,7 @@ class GroundingVerifier:
                 unsupported_claims=[answer.strip()],
                 explanation="no_retrieved_context",
             )
+
         try:
             raw = self._call_llm(answer, context_text)
             result = self._parse_result(raw)
@@ -264,5 +308,9 @@ class GroundingVerifier:
                 explanation=f"ungraded_llm_error: {exc}",
                 ungraded=True,
             )
+
+        # Apply the configurable threshold on top of the model's own
+        # "grounded" boolean -- a borderline score shouldn't pass just
+        # because the model itself said true.
         result.grounded = result.grounded and result.grounding_score >= self.grounded_score_threshold
-        return result   
+        return result
