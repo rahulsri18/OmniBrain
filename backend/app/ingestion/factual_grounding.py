@@ -106,3 +106,41 @@ class GroundingVerifier:
         self.request_timeout = request_timeout
         self.grounded_score_threshold = grounded_score_threshold
         self.on_ungraded = on_ungraded
+
+         # --- context handling -------------------------------------------------
+ 
+    @staticmethod
+    def _flatten_context(context_chunks: Any) -> str:
+        """
+        Accepts context as a single string, or a list of chunk dicts/strings
+        (e.g. the same shape hybrid_search.py / document_grader.py produce),
+        and flattens it into plain text for the prompt.
+        """
+        if context_chunks is None:
+            return NO_CONTEXT_PLACEHOLDER
+ 
+        if isinstance(context_chunks, str):
+            return context_chunks.strip() or NO_CONTEXT_PLACEHOLDER
+ 
+        if isinstance(context_chunks, list):
+            parts = []
+            for i, chunk in enumerate(context_chunks, start=1):
+                if isinstance(chunk, str):
+                    text = chunk
+                elif isinstance(chunk, dict):
+                    payload = chunk.get("payload") or {}
+                    text = (
+                        payload.get("text")
+                        or payload.get("content")
+                        or payload.get("chunk")
+                        or chunk.get("text")
+                        or ""
+                    )
+                else:
+                    text = str(chunk)
+                text = text.strip()
+                if text:
+                    parts.append(f"[Chunk {i}]\n{text}")
+            return "\n\n".join(parts) if parts else NO_CONTEXT_PLACEHOLDER
+ 
+        return str(context_chunks).strip() or NO_CONTEXT_PLACEHOLDER
