@@ -144,3 +144,35 @@ class GroundingVerifier:
             return "\n\n".join(parts) if parts else NO_CONTEXT_PLACEHOLDER
  
         return str(context_chunks).strip() or NO_CONTEXT_PLACEHOLDER
+
+    # --- LLM call with retry ----------------------------------------------
+ 
+    def _call_llm(self, answer: str, context_text: str) -> str:
+        user_prompt = GROUNDING_USER_TEMPLATE.format(answer=answer, context=context_text)
+ 
+        last_error: Optional[Exception] = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                if self.call_fn is not None:
+                    return self.call_fn(GROUNDING_SYSTEM_PROMPT, user_prompt)
+ 
+                kwargs: Dict[str, Any] = dict(
+                    model=self.model,
+                    max_tokens=600,
+                    system=GROUNDING_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                if self.request_timeout is not None:
+                    kwargs["timeout"] = self.request_timeout
+ 
+                response = self.llm_client.messages.create(**kwargs)
+                for block in response.content:
+                    if getattr(block, "type", None) == "text":
+                        return block.text
+                return ""
+            except Exception as exc:  # noqa: BLE001 - deliberately broad, see retry policy
+                last_error = exc
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    continue
+                raise last_error
