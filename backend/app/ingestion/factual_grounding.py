@@ -263,4 +263,6 @@ class GroundingVerifier:
                 grounding_score=1.0 if fallback_grounded else 0.0,
                 explanation=f"ungraded_llm_error: {exc}",
                 ungraded=True,
-            )   
+            )
+        result.grounded = result.grounded and result.grounding_score >= self.grounded_score_threshold
+        return result   
