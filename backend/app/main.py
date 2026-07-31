@@ -1,13 +1,14 @@
 import asyncio
 import json
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile,Request
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+
+from app.core.exceptions import GuardrailViolation
 from app.services.session_manager import session_manager
 from app.utils.stream_formatter import stream_formatter
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
-from app.core.exceptions import GuardrailViolation 
 
 # Import compiled graph safely
 try:
@@ -25,14 +26,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# --- Global Exception Handler for Guardrails (Day 13) ---
 @app.exception_handler(GuardrailViolation)
 async def guardrail_exception_handler(
     request: Request,
     exc: GuardrailViolation,
 ):
-    """
-    Global handler for blocked guardrail requests.
-    """
+    """Global handler returning HTTP 400 for guardrail violations."""
     return JSONResponse(
         status_code=400,
         content={
@@ -40,6 +41,7 @@ async def guardrail_exception_handler(
             "message": exc.message,
         },
     )
+
 
 ingestion_service = IngestionService()
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
@@ -105,9 +107,7 @@ async def upload_file(
 
 
 async def chat_stream(message: str, session_id: str = None, file_path: str = None):
-    """
-    Core Event Streamer wrapping LangGraph execution in explicit try-except timeouts.
-    """
+    """Core Event Streamer wrapping LangGraph execution."""
     async def event_generator():
         if app_graph is None:
             yield {"type": "error", "content": "LangGraph instance is not initialized on the server."}
@@ -121,7 +121,6 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
         }
 
         try:
-            # Stream LangGraph execution with chunk timeout protection
             async for event in app_graph.astream_events(initial_state, version="v2"):
                 kind = event.get("event")
                 name = event.get("name", "")
@@ -136,6 +135,14 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
 
         except asyncio.TimeoutError:
             yield {"type": "error", "content": "LangGraph execution timed out."}
+        except GuardrailViolation as gv:
+            yield {
+                "type": "error",
+                "status": "blocked",
+                "reason": "guardrail",
+                "message": gv.message,
+                "content": gv.message,
+            }
         except Exception as exc:
             yield {"type": "error", "content": f"Graph Execution Error: {str(exc)}"}
 
@@ -146,6 +153,10 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
 @app.post("/api/v1/chat")
 async def chat(request: ChatRequest):
     """Clean Single Route for Chat Streaming with Error Guardrails."""
+    # Optional synchronous guardrail check before starting stream
+    # if is_violating_guardrail(request.message):
+    #     raise GuardrailViolation("Input prompt contains policy violations.")
+
     session_id = getattr(request, "session_id", None)
     if not session_id or not session_manager.get_session(session_id):
         session_id = session_manager.create_session()
@@ -175,13 +186,11 @@ async def execution_status():
 @app.get("/api/v1/telemetry")
 async def telemetry(session_id: str = Query(None, description="Optional session ID to fetch rewrite metrics")):
     """Telemetry endpoint for query rewrite statistics."""
-    
-    # Session ID दिया है तो session_manager से रियल रिराइट काउंट उठाएगा
     if session_id:
         session = session_manager.get_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-        
+
         rewrite_count = session.get("rewrite_count", 0)
         return {
             "session_id": session_id,
@@ -190,28 +199,8 @@ async def telemetry(session_id: str = Query(None, description="Optional session 
             "message": f"Query rewrite count retrieved for session {session_id}."
         }
 
-    # अगर session_id नहीं दिया तो global / default Response देगा
     return {
         "query_rewrites": 0,
         "status": "tracking",
         "message": "Query rewrite telemetry is active."
     }
-    # Inside your existing main.py stream generator function:
-
-async def stream_agent_response(user_input: str):
-    try:
-        # 1. Existing execution call
-        async for event in app_graph.astream_events(
-            {"messages": [("user", user_input)]}, 
-            version="v2"
-        ):
-            # Your existing event handling logic here...
-            yield f"data: {json.dumps(event)}\n\n"
-
-    except asyncio.TimeoutError:
-        # Fallback stream event for timeouts
-        yield f"data: {json.dumps({'type': 'error', 'content': 'Request timed out.'})}\n\n"
-
-    except Exception as e:
-        # Fallback stream event for uncaught graph errors
-        yield f"data: {json.dumps({'type': 'error', 'content': f'Execution error: {str(e)}'})}\n\n"
