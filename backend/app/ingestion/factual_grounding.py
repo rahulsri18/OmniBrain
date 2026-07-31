@@ -58,3 +58,51 @@ Retrieved Context:
 """
  
 NO_CONTEXT_PLACEHOLDER = "(no context was retrieved)"
+
+@dataclass
+class GroundingResult:
+    grounded: bool
+    grounding_score: float
+    supported_claims: List[str] = field(default_factory=list)
+    unsupported_claims: List[str] = field(default_factory=list)
+    contradicted_claims: List[str] = field(default_factory=list)
+    explanation: str = ""
+    ungraded: bool = False  # True if verification failed after retries (transient error)
+    prompt_version: str = GROUNDING_PROMPT_VERSION
+ 
+ 
+class GroundingVerifier:
+    """
+    Wraps an LLM client to verify that a generated answer is grounded in
+    retrieved context.
+ 
+    llm_client must expose a `.messages.create(...)`-style method matching
+    the Anthropic Python SDK, or you can pass a custom `call_fn` that takes
+    (system_prompt, user_prompt) -> str (raw model text) and handles the
+    actual API call however you like.
+    """
+ 
+    def __init__(
+        self,
+        llm_client: Any = None,
+        model: Optional[str] = None,
+        call_fn: Optional[Any] = None,
+        max_retries: int = 2,
+        retry_backoff_seconds: float = 1.0,
+        request_timeout: Optional[float] = 15.0,
+        grounded_score_threshold: float = 0.7,
+        on_ungraded: str = "not_grounded",  # "not_grounded" | "grounded" | "raise"
+    ):
+        if llm_client is None and call_fn is None:
+            raise ValueError("Provide either llm_client or call_fn")
+        if on_ungraded not in ("not_grounded", "grounded", "raise"):
+            raise ValueError("on_ungraded must be 'not_grounded', 'grounded', or 'raise'")
+ 
+        self.llm_client = llm_client
+        self.model = model or os.environ.get("GROUNDING_MODEL", DEFAULT_GROUNDING_MODEL)
+        self.call_fn = call_fn
+        self.max_retries = max_retries
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self.request_timeout = request_timeout
+        self.grounded_score_threshold = grounded_score_threshold
+        self.on_ungraded = on_ungraded
