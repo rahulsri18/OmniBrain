@@ -251,3 +251,16 @@ class GroundingVerifier:
                 unsupported_claims=[answer.strip()],
                 explanation="no_retrieved_context",
             )
+        try:
+            raw = self._call_llm(answer, context_text)
+            result = self._parse_result(raw)
+        except Exception as exc:  # noqa: BLE001 - retries already exhausted upstream
+            if self.on_ungraded == "raise":
+                raise
+            fallback_grounded = self.on_ungraded == "grounded"
+            result = GroundingResult(
+                grounded=fallback_grounded,
+                grounding_score=1.0 if fallback_grounded else 0.0,
+                explanation=f"ungraded_llm_error: {exc}",
+                ungraded=True,
+            )   
