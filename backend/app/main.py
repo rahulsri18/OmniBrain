@@ -136,7 +136,13 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
         except asyncio.TimeoutError:
             yield {"type": "error", "content": "LangGraph execution timed out."}
         except GuardrailViolation as gv:
-            yield {"type": "error", "content": f"Blocked by Guardrails: {gv.message}"}
+            yield {
+                "type": "error",
+                "status": "blocked",
+                "reason": "guardrail",
+                "message": gv.message,
+                "content": gv.message,
+            }
         except Exception as exc:
             yield {"type": "error", "content": f"Graph Execution Error: {str(exc)}"}
 
