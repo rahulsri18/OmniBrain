@@ -1,30 +1,4 @@
-from langgraph.graph import StateGraph, START, END
 
-from agents.state import GraphState
-from agents.nodes import (
-    router_node,
-    grader_node,
-    routing_decider,
-)
-
-workflow = StateGraph(GraphState)
-
-workflow.add_node("router", router_node)
-workflow.add_node("grader", grader_node)
-
-workflow.add_edge(START, "router")
-workflow.add_edge("router", "grader")
-
-workflow.add_conditional_edges(
-    "grader",
-    routing_decider,
-    {
-        "retry": "router",
-        "accept": END,
-    },
-)
-
-app_graph = workflow.compile()
 # agents/graph.py
 """
 LangGraph Workflow Definition & Compiler.
@@ -44,6 +18,7 @@ from agents.nodes import router_node
 from agents.guardrail import input_safety_rail_node
 from agents.vision_node import vision_node
 from agents.nodes.fallback import fallback_node
+from agents.output_guardrail import output_validation_rail_node
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +64,8 @@ builder.add_node("input_rail", input_safety_rail_node)
 builder.add_node("supervisor", router_node)
 builder.add_node("vision", vision_node)
 builder.add_node("fallback", fallback_node)
+builder.add_node("output_rail", output_validation_rail_node)
+builder.add_edge("output_rail", END)
 
 # NOTE: "retriever" and "sql" are currently handled *inside* router_node
 # itself (see agents/nodes.py), not as separate graph nodes. They route
@@ -96,17 +73,17 @@ builder.add_node("fallback", fallback_node)
 # add them here with builder.add_node(...) and point the conditional
 # edges at those names instead of END.
 
-builder.set_entry_point("supervisor")
+builder.set_entry_point("input_rail")
 builder.add_edge("input_rail", "supervisor")
 
 builder.add_conditional_edges(
     "supervisor",
     route_after_supervisor,
     {
-        "retriever": END,     # router_node already resolved retrieval inline
-        "sql": END,           # router_node already resolved SQL inline
-        "vision": "vision",   # hand off to the real vision node
-        "general": END,
+        "retriever": "output_rail",
+        "sql": "output_rail",
+        "vision": "vision",
+        "general": "output_rail",
         "fallback": "fallback",
     },
 )
@@ -115,12 +92,13 @@ builder.add_conditional_edges(
     "vision",
     route_after_vision,
     {
-        "end": END,
+        "end": "output_rail",
         "fallback": "fallback",
     },
 )
 
-builder.add_edge("fallback", END)
+builder.add_edge("fallback", "output_rail")
+builder.add_edge("output_rail", END)
 
 # ---------------------------------------------------------------------------
 # 3. Compile once
