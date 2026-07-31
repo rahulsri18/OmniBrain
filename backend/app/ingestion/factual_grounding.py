@@ -176,3 +176,51 @@ class GroundingVerifier:
                     time.sleep(self.retry_backoff_seconds * (2 ** attempt))
                     continue
                 raise last_error
+
+             # --- parsing ------------------------------------------------------------
+ 
+    @staticmethod
+    def _coerce_str_list(value: Any) -> List[str]:
+        if not isinstance(value, list):
+            return []
+        return [str(item) for item in value if str(item).strip()]
+ 
+    @classmethod
+    def _parse_result(cls, raw_text: str) -> GroundingResult:
+        """Robustly parse the model's JSON output, tolerating stray text/fences."""
+        cleaned = raw_text.strip()
+        cleaned = re.sub(r"^```(json)?", "", cleaned).strip()
+        cleaned = re.sub(r"```$", "", cleaned).strip()
+ 
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if not match:
+            return GroundingResult(
+                grounded=False,
+                grounding_score=0.0,
+                explanation="unparsable_verifier_output",
+            )
+ 
+        try:
+            data = json.loads(match.group(0))
+        except (json.JSONDecodeError, TypeError):
+            return GroundingResult(
+                grounded=False,
+                grounding_score=0.0,
+                explanation="unparsable_verifier_output",
+            )
+ 
+        raw_score = data.get("grounding_score", 0.0)
+        try:
+            score = float(raw_score)
+        except (TypeError, ValueError):
+            score = 0.0
+        score = min(1.0, max(0.0, score))  # clamp, don't trust the model blindly
+ 
+        return GroundingResult(
+            grounded=bool(data.get("grounded", False)),
+            grounding_score=score,
+            supported_claims=cls._coerce_str_list(data.get("supported_claims")),
+            unsupported_claims=cls._coerce_str_list(data.get("unsupported_claims")),
+            contradicted_claims=cls._coerce_str_list(data.get("contradicted_claims")),
+            explanation=str(data.get("explanation", "")),
+        )
