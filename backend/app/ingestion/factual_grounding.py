@@ -224,3 +224,30 @@ class GroundingVerifier:
             contradicted_claims=cls._coerce_str_list(data.get("contradicted_claims")),
             explanation=str(data.get("explanation", "")),
         )
+     # --- public API ----------------------------------------------------------
+ 
+    def verify(self, answer: str, context_chunks: Any) -> GroundingResult:
+        """
+        Verify whether `answer` is grounded in `context_chunks`.
+ 
+        context_chunks may be a plain string, or a list of chunk dicts/strings
+        (matching hybrid_search.py / document_grader.py result shapes).
+        """
+        if not answer or not answer.strip():
+            return GroundingResult(
+                grounded=False,
+                grounding_score=0.0,
+                explanation="empty_answer",
+            )
+ 
+        context_text = self._flatten_context(context_chunks)
+ 
+        if context_text == NO_CONTEXT_PLACEHOLDER:
+            # No context at all means nothing in the answer can be
+            # considered supported -- fail safe rather than assume grounded.
+            return GroundingResult(
+                grounded=False,
+                grounding_score=0.0,
+                unsupported_claims=[answer.strip()],
+                explanation="no_retrieved_context",
+            )
