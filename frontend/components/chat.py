@@ -75,6 +75,29 @@ def render_chat():
 
         # Assistant response rendering
         with st.chat_message("assistant", avatar="🤖"):
+
+    # Day 12 - Query Rewriter
+            st.info(
+        "🔄 Retrying search with optimized query..."
+    )
+
+            st.code(
+        "Compare annual revenue trends from the uploaded financial report.",
+        language="text",
+    )
+
+            status = st.status(
+        "🟡 Grading retrieved documents...",
+        expanded=False,
+    )
+
+            with st.spinner("Analyzing retrieved context..."):
+                time.sleep(2)
+
+            status.update(
+                label="✅ Document grading completed",
+                state="complete",
+    )
             # Day 12 - Query Rewriter Sub-Text Widget
             rewritten_query_sample = (
                 "Compare annual revenue trends from the uploaded financial report."
@@ -96,11 +119,13 @@ def render_chat():
                 time.sleep(1)
 
             response = (
-                "This is a placeholder response from OmniBrain.\n\n"
-                "Backend integration with the LangGraph agent will be connected in the next milestone."
-            )
+        "This is a placeholder response from OmniBrain.\n\n"
+        "Backend integration with the LangGraph agent will be connected in the next milestone."
+    )
 
             st.markdown(response)
+
+            vision_image = "https://placehold.co/700x350/png?text=Vision+Agent+Output"
 
             vision_image = (
                 "https://placehold.co/700x350/png?text=Vision+Agent+Output"
@@ -109,7 +134,7 @@ def render_chat():
                 vision_image,
                 caption="Image referenced by the Vision Agent",
                 width=500,
-            )
+    )
 
             # Day 9 - Agent reasoning
             reasoning_steps = [
