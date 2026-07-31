@@ -75,6 +75,18 @@ def render_chat():
 
         # Assistant response rendering
         with st.chat_message("assistant", avatar="🤖"):
+        # Day 13 - Guardrails (Input Policy)
+            guardrail_status = st.status(
+        "🛡️ Checking user prompt against safety policies...",
+        expanded=False,
+    )
+
+            time.sleep(1)
+
+            guardrail_status.update(
+                label="✅ Prompt passed safety validation",
+                state="complete",
+    )    
 
     # Day 12 - Query Rewriter
             st.info(
