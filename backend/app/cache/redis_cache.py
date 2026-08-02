@@ -210,3 +210,41 @@ class RedisCache:
             return True
         except Exception:
             return False
+    def delete(self, query: str, **extra_params: Any) -> bool:
+        """Remove a single cached entry for a query. Returns True if a key was deleted."""
+        if not query or not query.strip():
+            return False
+        if not self._ensure_connected():
+            return False
+ 
+        key = self._make_key(query, **extra_params)
+        try:
+            deleted_count = self._client.delete(key)
+            return deleted_count > 0
+        except Exception:
+            return False
+ 
+    def clear(self) -> bool:
+        """
+        Remove ALL cached retrieval results (every key under this cache's
+        prefix). Useful after re-ingesting documents, when previously
+        cached results may now be stale/incomplete. Returns True on
+        success, False if Redis is unavailable or the operation failed.
+        """
+        if not self._ensure_connected():
+            return False
+ 
+        try:
+            # SCAN instead of KEYS: KEYS blocks the whole Redis instance on
+            # large keyspaces, SCAN doesn't.
+            cursor = 0
+            pattern = f"{self.key_prefix}:*"
+            while True:
+                cursor, keys = self._client.scan(cursor=cursor, match=pattern, count=500)
+                if keys:
+                    self._client.delete(*keys)
+                if cursor == 0:
+                    break
+            return True
+        except Exception:
+            return False
