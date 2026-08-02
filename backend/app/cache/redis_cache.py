@@ -1,108 +1,137 @@
 """
 redis_cache.py
-
-Establishes and manages a single Redis connection for the application.
-
-Scope of this module (intentionally limited):
-    - Read Redis configuration from environment variables
-    - Create and verify a Redis client connection
-    - Expose the client instance for use elsewhere
-    - Handle connection failures with logging/exceptions
-
-Out of scope for this commit (to be added later):
-    - get() / set() / delete() / clear()
-    - Integration with hybrid_search.py
-    - Caching of retrieval results
+ 
+Caches hybrid-search retrieval results keyed by query, so repeated identical
+queries skip embedding generation + Qdrant search entirely. This module
+caches RETRIEVAL RESULTS ONLY -- not embeddings, not LLM output, not
+document-grader or grounding-verifier results. Those are separate caching
+concerns for a future task, if ever needed.
+ 
+Sits alongside document_grader.py, factual_grounding.py, and
+query_transformer.py in spirit (same project conventions -- lazy client
+init, env-var config, safe fallback on failure) but lives in its own
+`cache/` package since it isn't retrieval logic itself.
+ 
+Expected usage:
+ 
+    from cache.redis_cache import RedisCache
+ 
+    cache = RedisCache()
+    cache.connect()
+ 
+    cached = cache.get(query)
+    if cached is not None:
+        return cached
+ 
+    results = hybrid_search(query)
+    cache.set(query, results)
+    return results
 """
-
+ 
+import hashlib
+import json
 import os
-import logging
-
-import redis
-
-logger = logging.getLogger(__name__)
-
-
+from typing import Any, List, Optional
+ 
+try:
+    import redis
+except ImportError:  # pragma: no cover - exercised only if redis isn't installed
+    redis = None
+ 
+ 
+DEFAULT_REDIS_HOST = "localhost"
+DEFAULT_REDIS_PORT = 6379
+DEFAULT_REDIS_DB = 0
+DEFAULT_TTL_SECONDS = 300  # 5 minutes -- retrieval results go stale as documents are re-ingested
+CACHE_KEY_PREFIX = "retrieval_cache"
+ 
+ 
 class RedisCache:
     """
-    Manages the lifecycle of a single Redis connection.
-
-    Configuration is read from environment variables:
-        REDIS_HOST     - Redis server host (default: "localhost")
-        REDIS_PORT     - Redis server port (default: 6379)
-        REDIS_DB       - Redis logical database index (default: 0)
-        REDIS_PASSWORD - Redis password, if required (default: None)
+    Thin caching layer over Redis for retrieval results.
+ 
+    Design choices:
+    - Connection is lazy: connect() must be called explicitly (or is called
+      automatically on first get/set/delete/clear if not yet connected),
+      rather than opening a socket in __init__. This keeps constructing a
+      RedisCache instance cheap and side-effect-free, which matters for
+      testing and for app startup that shouldn't hard-fail if Redis isn't
+      up yet.
+    - All public methods fail SAFE, not loud: if Redis is unreachable, get()
+      returns None (cache miss -- falls through to Qdrant), and set()/
+      delete()/clear() silently no-op after logging. A cache outage should
+      degrade retrieval to "slower", never "broken".
+    - Keys are a hash of the normalized query text plus any extra
+      parameters that affect results (top_k, page filters, etc.), so
+      "What is RAG?" and "what is rag?" hit the same cache entry, but
+      different top_k/filter combinations don't collide.
     """
-
-    def __init__(self):
-        self.host = os.getenv("REDIS_HOST", "localhost")
-        self.port = int(os.getenv("REDIS_PORT", 6379))
-        self.db = int(os.getenv("REDIS_DB", 0))
-        self.password = os.getenv("REDIS_PASSWORD") or None
-
-        self._client = None
-        self._connect()
-
-    def _connect(self):
+ 
+    def __init__(
+        self,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        db: Optional[int] = None,
+        password: Optional[str] = None,
+        ttl_seconds: int = DEFAULT_TTL_SECONDS,
+        key_prefix: str = CACHE_KEY_PREFIX,
+        socket_timeout: float = 2.0,
+        client: Any = None,
+    ):
+        if redis is None and client is None:
+            raise ImportError(
+                "redis-py is not installed. Run `pip install redis` or pass "
+                "a pre-built client/fake client via the `client` argument "
+                "(e.g. fakeredis, for tests)."
+            )
+ 
+        self.host = host or os.environ.get("REDIS_HOST", DEFAULT_REDIS_HOST)
+        self.port = port or int(os.environ.get("REDIS_PORT", DEFAULT_REDIS_PORT))
+        self.db = db if db is not None else int(os.environ.get("REDIS_DB", DEFAULT_REDIS_DB))
+        self.password = password or os.environ.get("REDIS_PASSWORD") or None
+        self.ttl_seconds = ttl_seconds
+        self.key_prefix = key_prefix
+        self.socket_timeout = socket_timeout
+ 
+        # Allows injecting a fakeredis client (or any redis-compatible
+        # client) for tests without touching a real Redis instance.
+        self._client = client
+        self._connected = client is not None
+ 
+    # --- connection management ---------------------------------------------
+ 
+    def connect(self) -> bool:
         """
-        Create the Redis client and verify the connection with a ping.
-
-        Raises:
-            redis.exceptions.RedisError: if the connection cannot be
-            established or the ping check fails.
+        Establish the Redis connection. Safe to call multiple times --
+        no-ops if already connected. Returns True if connected (or already
+        was), False if the connection attempt failed.
         """
+        if self._connected and self._client is not None:
+            return True
+ 
         try:
-            client = redis.Redis(
+            self._client = redis.Redis(
                 host=self.host,
                 port=self.port,
                 db=self.db,
                 password=self.password,
+                socket_timeout=self.socket_timeout,
+                socket_connect_timeout=self.socket_timeout,
                 decode_responses=True,
             )
-            # Verify the connection is actually usable, not just constructed.
-            client.ping()
-
-            self._client = client
-            logger.info(
-                "Connected to Redis at %s:%s (db=%s)",
-                self.host, self.port, self.db,
-            )
-        except redis.exceptions.RedisError as exc:
-            logger.error(
-                "Failed to connect to Redis at %s:%s (db=%s): %s",
-                self.host, self.port, self.db, exc,
-            )
-            raise
-
-    def get_client(self):
-        """
-        Return the active Redis client instance.
-
-        Returns:
-            redis.Redis: the connected client.
-
-        Raises:
-            RuntimeError: if called before a successful connection was made.
-        """
-        if self._client is None:
-            raise RuntimeError("Redis client is not connected.")
-        return self._client
-
-    def close(self):
-        """Close the underlying Redis connection, if open."""
-        if self._client is not None:
-            try:
-                self._client.close()
-                logger.info("Redis connection closed.")
-            except redis.exceptions.RedisError as exc:
-                logger.warning("Error while closing Redis connection: %s", exc)
-            finally:
-                self._client = None
-
-
-if __name__ == "__main__":
-    # Smoke test: run this file directly to verify connectivity.
-    logging.basicConfig(level=logging.INFO)
-    cache = RedisCache()
-    print(cache.get_client())
-    cache.close()
+            self._client.ping()
+            self._connected = True
+            return True
+        except Exception:
+            # Connection failures are expected/recoverable (Redis down,
+            # network blip) -- callers should keep working without cache
+            # rather than crash. _connected stays False so the next
+            # get/set call will retry connecting.
+            self._client = None
+            self._connected = False
+            return False
+ 
+    def _ensure_connected(self) -> bool:
+        if self._connected and self._client is not None:
+            return True
+        return self.connect()
