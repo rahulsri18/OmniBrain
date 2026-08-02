@@ -149,3 +149,64 @@ class RedisCache:
         serialized = json.dumps(key_material, sort_keys=True)
         digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
         return f"{self.key_prefix}:{digest}"
+     # --- public cache operations ------------------------------------------
+ 
+    def get(self, query: str, **extra_params: Any) -> Optional[List[Any]]:
+        """
+        Retrieve cached retrieval results for a query. Returns None on a
+        cache miss OR if Redis is unavailable -- callers should treat both
+        the same way (fall through to Qdrant search).
+        """
+        if not query or not query.strip():
+            return None
+        if not self._ensure_connected():
+            return None
+ 
+        key = self._make_key(query, **extra_params)
+        try:
+            raw = self._client.get(key)
+        except Exception:
+            return None
+ 
+        if raw is None:
+            return None
+ 
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            # Corrupted cache entry -- treat as a miss rather than raising,
+            # and clean it up so it doesn't keep failing on every request.
+            try:
+                self._client.delete(key)
+            except Exception:
+                pass
+            return None
+ 
+    def set(self, query: str, results: List[Any], ttl_seconds: Optional[int] = None, **extra_params: Any) -> bool:
+        """
+        Cache retrieval results for a query. Returns True on success, False
+        if Redis is unavailable or the write failed -- callers generally
+        don't need to check this; a failed cache write just means the next
+        identical query will re-run the search, which is correct fallback
+        behavior, not an error condition to propagate.
+        """
+        if not query or not query.strip():
+            return False
+        if not self._ensure_connected():
+            return False
+ 
+        key = self._make_key(query, **extra_params)
+        ttl = ttl_seconds if ttl_seconds is not None else self.ttl_seconds
+ 
+        try:
+            serialized = json.dumps(results)
+        except TypeError:
+            # Results aren't JSON-serializable (e.g. contain custom
+            # objects) -- skip caching rather than crash the retrieval path.
+            return False
+ 
+        try:
+            self._client.set(key, serialized, ex=ttl)
+            return True
+        except Exception:
+            return False
