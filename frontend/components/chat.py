@@ -119,6 +119,29 @@ def render_chat():
     )
 
             st.markdown(response)
+            # Day 14 - Retrieval Metadata
+
+            with st.container():
+
+                st.caption("📚 Retrieved Context")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.metric(
+                      label="Documents Retrieved",
+                      value="4",
+        )
+
+                with col2:
+                    st.metric(
+                      label="Confidence",
+                      value="92%",
+        )
+
+                st.caption(
+                    "Source: Annual_Report_2025.pdf • Pages 12–18 (Placeholder)"
+            )
 
             vision_image = "https://placehold.co/700x350/png?text=Vision+Agent+Output"
 
