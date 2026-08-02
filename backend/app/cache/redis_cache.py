@@ -135,3 +135,17 @@ class RedisCache:
         if self._connected and self._client is not None:
             return True
         return self.connect()
+     # --- key construction ----------------------------------------------------
+ 
+    def _make_key(self, query: str, **extra_params: Any) -> str:
+        """
+        Build a cache key from the normalized query plus any parameters
+        that affect retrieval results (top_k, page filters, collection
+        name, etc.), so different parameter combinations don't collide.
+        """
+        normalized_query = query.strip().lower()
+        key_material = {"query": normalized_query, **extra_params}
+        # Sort keys so parameter order never changes the resulting hash.
+        serialized = json.dumps(key_material, sort_keys=True)
+        digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+        return f"{self.key_prefix}:{digest}"
