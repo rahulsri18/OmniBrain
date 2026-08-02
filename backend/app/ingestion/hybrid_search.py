@@ -16,6 +16,7 @@ from .deduplication import TextDeduplicator
 from .retrieval_filter import RetrievalFilter
 from ..vectordb.qdrant_client import QdrantDB
 from ..logger import logger
+from ..cache.redis_cache import RedisCache
 
 
 class HybridRetriever:
