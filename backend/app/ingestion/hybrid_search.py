@@ -27,27 +27,38 @@ class HybridRetriever:
         clip_model_name: str = "openai/clip-vit-base-patch32",
     ):
         """Initialize text embedder, CLIP model and Qdrant client.
-
+ 
         - `text_collection` defaults to the QdrantDB default (omnibrain)
         - `image_collection` defaults to 'omnibrain_vision'
         """
         self.embedder = EmbeddingGenerator()
-
+ 
         # CLIP for text->image retrieval
         self.clip_model_name = clip_model_name
         self.processor = CLIPProcessor.from_pretrained(self.clip_model_name)
         self.clip_model = CLIPModel.from_pretrained(self.clip_model_name)
-
+ 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.clip_model.to(self.device)
-
+ 
         self.retrieval_filter = RetrievalFilter()
         self.deduplicator = TextDeduplicator()
-
+ 
         # Qdrant DB client (single instance can query multiple collections)
         self.db = QdrantDB()
         self.text_collection = text_collection or self.db.collection_name
         self.image_collection = image_collection or "omnibrain_vision"
+ 
+        # Caches search_text() results, keyed by query + params, so an
+        # identical repeated query skips embedding generation and the
+        # Qdrant call entirely. Built defensively: if redis-py isn't
+        # installed or Redis isn't reachable yet, retrieval must still
+        # work uncached rather than fail to construct the retriever.
+        try:
+            self.cache = RedisCache()
+        except Exception as e:
+            logger.warning(f"Redis cache unavailable, continuing without caching: {e}")
+            self.cache = None
 
     def _point_to_dict(self, point: Any) -> Dict[str, Any]:
         """Normalize a returned Qdrant point to a dict.
