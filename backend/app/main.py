@@ -4,11 +4,15 @@ from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Reques
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .middleware.rate_limiter import limiter
 from app.core.exceptions import GuardrailViolation
 from app.services.session_manager import session_manager
 from app.utils.stream_formatter import stream_formatter
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from fastapi import Request
 
 # Import compiled graph safely
 try:
@@ -17,6 +21,12 @@ except ImportError:
     app_graph = None
 
 app = FastAPI(title="OmniBrain Backend", version="0.1.0")
+
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,7 +78,9 @@ def home():
 
 
 @app.post("/api/v1/upload")
+@limiter.limit("10/minute")
 async def upload_file(
+    request: Request,
     background_tasks: BackgroundTasks, file: UploadFile = File(...)
 ):
     is_pdf_mime = file.content_type == "application/pdf"
@@ -151,24 +163,27 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
 
 
 @app.post("/api/v1/chat")
-async def chat(request: ChatRequest):
+@limiter.limit("30/minute")
+async def chat(
+    request: Request,
+    chat_request: ChatRequest):
     """Clean Single Route for Chat Streaming with Error Guardrails."""
     # Optional synchronous guardrail check before starting stream
     # if is_violating_guardrail(request.message):
     #     raise GuardrailViolation("Input prompt contains policy violations.")
 
-    session_id = getattr(request, "session_id", None)
+    session_id = getattr(chat_request, "session_id", None)
     if not session_id or not session_manager.get_session(session_id):
         session_id = session_manager.create_session()
 
     session_manager.add_message(
-        session_id, role="user", content=request.message
+        session_id, role="user", content=chat_request.message
     )
 
-    file_path = getattr(request, "file_path", None)
+    file_path = getattr(chat_request, "file_path", None)
 
     return StreamingResponse(
-        chat_stream(request.message, session_id, file_path),
+        chat_stream(chat_request.message, session_id, file_path),
         media_type="text/event-stream",
         headers={"X-Session-ID": session_id},
     )
