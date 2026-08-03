@@ -118,7 +118,12 @@ def render_chat():
         "Backend integration with the LangGraph agent will be connected in the next milestone."
     )
 
-            st.markdown(response)
+            placeholder = st.empty()
+            streamed_text = ""
+            for word in response.split():
+                streamed_text += word + " "
+                placeholder.markdown(streamed_text)
+                time.sleep(0.05)
             # Day 14 - Retrieval Metadata
 
             with st.container():
