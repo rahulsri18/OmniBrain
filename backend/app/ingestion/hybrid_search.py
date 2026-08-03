@@ -96,11 +96,27 @@ class HybridRetriever:
         """Generate a text embedding and search the text collection."""
         if not query or not query.strip():
             return []
-
+ 
+        # Cache lookup happens BEFORE embedding generation and the Qdrant
+        # call -- on a hit, neither of those run at all. This only caches
+        # retrieval results for search_text(); it does not touch
+        # search_images(), the document grader, or the LLM call.
+        cache_params = dict(
+            top_k=top_k,
+            page=page,
+            page_number=page_number,
+            page_numbers=page_numbers,
+            page_range=page_range,
+        )
+        if self.cache is not None:
+            cached_results = self.cache.get(query, **cache_params)
+            if cached_results is not None:
+                return cached_results
+ 
         emb = self.embedder.generate_embedding(query)
         if not emb:
             return []
-
+ 
         try:
             results = self.db.search(
                 query_embedding=emb,
@@ -111,7 +127,12 @@ class HybridRetriever:
                 page_numbers=page_numbers,
                 page_range=page_range,
             )
-            return [self._point_to_dict(p) for p in results]
+            point_dicts = [self._point_to_dict(p) for p in results]
+ 
+            if self.cache is not None:
+                self.cache.set(query, point_dicts, **cache_params)
+ 
+            return point_dicts
         except Exception as e:
             logger.error(f"Text search failed: {e}")
             return []
