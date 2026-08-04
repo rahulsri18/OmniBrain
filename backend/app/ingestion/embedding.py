@@ -81,4 +81,18 @@ class EmbeddingGenerator:
                 valid_chunks.append(chunk)
  
         results: List[List[float]] = [[] for _ in chunks]
-        
+        if not valid_chunks:
+            return results
+ 
+        # `SentenceTransformer.encode(batch_size=...)` already handles the
+        # chunking-into-batches internally (via its own DataLoader), so we
+        # pass batch_size through rather than manually slicing chunks and
+        # calling .encode() once per slice -- that would just re-implement
+        # what the library already does, with no throughput benefit.
+        embeddings = self.model.encode(
+            valid_chunks,
+            batch_size=effective_batch_size,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=True,
+        )
