@@ -5,7 +5,7 @@ tests/test_vision_backup_prompt.py
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 # pyrefly: ignore [missing-import]
-from agents.nodes.vision_node import execute_vision_agent
+from agents.vision_node import execute_vision_agent
 
 
 @pytest.mark.asyncio
