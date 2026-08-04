@@ -96,3 +96,8 @@ class EmbeddingGenerator:
             normalize_embeddings=True,
             show_progress_bar=True,
         )
+        embeddings_list = embeddings.tolist()
+        for original_index, embedding in zip(valid_indices, embeddings_list):
+            results[original_index] = embedding
+ 
+        return results
