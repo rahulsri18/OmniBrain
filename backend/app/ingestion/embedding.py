@@ -1,6 +1,4 @@
 """
-embedding.py
-
 Generate embeddings using the all-MiniLM-L6-v2 model.
 """
 
@@ -101,3 +99,4 @@ class EmbeddingGenerator:
             results[original_index] = embedding
  
         return results
+
