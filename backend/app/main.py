@@ -3,7 +3,7 @@ import json
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-
+from fastapi.middleware.gzip import GZipMiddleware
 from .middleware.rate_limiter import limiter
 from app.core.exceptions import GuardrailViolation
 from app.services.session_manager import session_manager
@@ -34,6 +34,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1000
 )
 
 
@@ -75,7 +80,6 @@ async def timeout_middleware(request, call_next):
 @app.get("/")
 def home():
     return {"message": "Server is running"}
-
 
 @app.post("/api/v1/upload")
 @limiter.limit("10/minute")
