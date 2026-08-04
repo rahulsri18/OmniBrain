@@ -28,7 +28,25 @@ def render_chat():
         st.session_state.messages = []
 
     # Display previous chat history
-    for message in st.session_state.messages:
+    # -----------------------------
+# Day 16 - Chat History Pagination
+# -----------------------------
+    PAGE_SIZE = 5
+
+    if "chat_page" not in st.session_state:
+        st.session_state.chat_page = 1
+
+    total_messages = len(st.session_state.messages)
+    start_index = max(0, total_messages - (PAGE_SIZE * st.session_state.chat_page))
+    visible_messages = st.session_state.messages[start_index:]
+
+    if total_messages > PAGE_SIZE:
+        if st.button("⬆️ Load Older Messages"):
+            st.session_state.chat_page += 1
+            st.rerun()
+
+# Display paginated messages
+    for message in visible_messages:
 
         avatar = "👤" if message["role"] == "user" else "🤖"
 
