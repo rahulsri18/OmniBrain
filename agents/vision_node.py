@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional
 import cv2
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from agents.langfuse_tracing import trace_node
 
 from backend.app.config import settings
 from backend.app.logger import logger
@@ -104,6 +105,7 @@ class VisionSubAgent:
 # LangGraph node
 # ---------------------------------------------------------------------------
 
+@trace_node("vision")
 def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     LangGraph node for vision analysis. Runs blur detection first;
