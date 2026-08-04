@@ -14,7 +14,16 @@ Single source of truth for the OmniBrain agent graph:
 from langgraph.graph import StateGraph, END
 
 from agents.state import GraphState
-from agents.nodes import router_node
+from agents.nodes import (
+    router_node,
+    sql_node,
+    retriever_node,
+    merge_node,
+    grader_node,
+    routing_decider,
+    query_rewriter_node,
+)
+
 from agents.guardrail import input_safety_rail_node
 from agents.vision_node import vision_node
 # pyrefly: ignore [missing-import]
@@ -107,79 +116,3 @@ builder.add_edge("output_rail", END)
 
 app_graph = builder.compile()
 graph = app_graph  # backwards-compatible alias, in case other files import `graph`
-"""
-agents/graph.py
-
-Configures nodes, conditional edges, and the Max Loop filter (Max Loop = 3).
-"""
-
-from typing import Any, Dict
-from langgraph.graph import END, StateGraph
-
-# pyrefly: ignore [missing-import
-from OmniBrain.agents.nodes.fallback import fallback_node
-# Import your other nodes here (e.g., retriever_node, grader_node, transformer_node, generate_node)
-
-MAX_LOOPS = 3
-
-
-def decide_to_generate_or_rewrite(state: Dict[str, Any]) -> str:
-    """
-    Conditional edge router for Day 12:
-    Evaluates document relevance and enforces Max Loop = 3.
-    """
-    loop_count = state.get("loop_count", 0)
-    documents = state.get("documents", [])
-    
-    # Check if any documents are relevant (using M7's grading flag or count)
-    has_relevant_docs = any(doc.get("relevant", False) for doc in documents)
-
-    if has_relevant_docs:
-        print("---DECISION: DOCS ARE RELEVANT -> GENERATE---")
-        return "generate"
-
-    # Enforce Maximum Loop Limit (Max Loop = 3)
-    if loop_count >= MAX_LOOPS:
-        print(f"---DECISION: MAX LOOPS ({MAX_LOOPS}) REACHED -> GENERATE WITH FALLBACK CONTEXT---")
-        return "generate_fallback"
-
-    print(f"---DECISION: NO RELEVANT DOCS (Attempt {loop_count + 1}/{MAX_LOOPS}) -> REWRITE QUERY---")
-    return "transform_query"
-
-
-def increment_loop_count(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Helper node or inline state update to increment loop count prior to re-querying."""
-    current_count = state.get("loop_count", 0)
-    return {
-        **state,
-        "loop_count": current_count + 1
-    }
-    # Create Workflow
-workflow = StateGraph(GraphState)
-
-# Add Nodes
-# workflow.add_node("retrieve", retrieve_node)
-# workflow.add_node("grade_documents", grade_documents_node)
-# workflow.add_node("transform_query", transform_query_node)
-# workflow.add_node("generate", generate_node)
-workflow.add_node("fallback", fallback_node)
-
-# Set Entry Point
-# workflow.set_entry_point("retrieve")
-
-# Add Conditional Edge from Grader to next step
-# workflow.add_conditional_edges(
-#     "grade_documents",
-#     decide_to_generate_or_rewrite,
-#     {
-#         "generate": "generate",
-#         "transform_query": "transform_query",
-#         "generate_fallback": "generate",  # Proceeds to generate using best available context or fallback
-#     },
-# )
-
-# workflow.add_edge("transform_query", "retrieve")
-# workflow.add_edge("generate", END)
-
-# Compile with recursion limit protection
-app_graph = workflow.compile()

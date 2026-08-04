@@ -125,3 +125,52 @@ def routing_decider(state: GraphState) -> str:
         return "retry"
 
     return "accept"
+# ==========================================================
+# Day 16 - Parallel Execution Nodes
+# ==========================================================
+
+@trace_node("sql")
+def sql_node(state: GraphState) -> GraphState:
+    """
+    Executes SQL retrieval independently.
+    """
+    result = sql_agent_node(state["question"])
+
+    state["sql_result"] = result
+
+    return state
+
+
+@trace_node("retriever")
+def retriever_node(state: GraphState) -> GraphState:
+    """
+    Executes vector retrieval independently.
+    """
+
+    raw_documents = retriever_tool(state["question"])
+
+    clean_context = parse_retriever_output(raw_documents)
+
+    state["retriever_result"] = clean_context
+
+    return state
+
+
+@trace_node("merge")
+def merge_node(state: GraphState) -> GraphState:
+    """
+    Merge outputs from SQL and Retriever branches.
+    """
+
+    merged_context = []
+
+    if state.get("retriever_result"):
+        merged_context.extend(state["retriever_result"])
+
+    if state.get("sql_result"):
+        merged_context.append(str(state["sql_result"]))
+
+    state["merged_context"] = merged_context
+    state["context"] = merged_context
+
+    return state

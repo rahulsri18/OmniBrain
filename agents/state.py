@@ -26,7 +26,12 @@ class GraphState(TypedDict):
 
     # Additional metadata
     metadata: Dict[str, Any]
-        # Self-RAG retry tracking
+    # Parallel execution results
+    sql_result: Optional[Any]
+    retriever_result: Optional[List[str]]
+    merged_context: Optional[List[str]]
+
+    # Self-RAG retry tracking
     loop_count: int
     max_loops: int
 
@@ -43,7 +48,11 @@ def create_initial_state(question: str) -> GraphState:
         "route": None,
         "error": None,
         "metadata": {},
-            # Self-RAG retry tracking
+        "sql_result": None,
+        "retriever_result": None,
+        "merged_context": [],
+
+        # Self-RAG retry tracking
         "loop_count": 0,
         "max_loops": 3,
     }
