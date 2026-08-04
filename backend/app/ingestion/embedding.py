@@ -17,8 +17,14 @@ class EmbeddingGenerator:
     def __init__(
         self,
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        batch_size: int = 32,
     ):
         self.model = SentenceTransformer(model_name)
+        # Configurable rather than hardcoded so callers can tune throughput
+        # vs. memory (larger batches = fewer model invocations but more
+        # memory per call) without touching this file. Can still be
+        # overridden per-call via generate_embeddings(batch_size=...).
+        self.batch_size = batch_size
 
     def generate_embedding(self, text: str) -> List[float]:
         """
