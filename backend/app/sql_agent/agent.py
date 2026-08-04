@@ -9,11 +9,11 @@ from langchain_openai import ChatOpenAI
 from app.logger import logger
 from app.sql_agent.db import ReadOnlySQLDatabase
 from app.sql_agent.prompts import SQL_SYSTEM_PROMPT
+from app.config import settings
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+llm = ChatOpenAI(model=settings.SQL_AGENT_MODEL, temperature=settings.TEMPERATURE)
 
-# Local SQLite DB instance (update db_path if needed)
-db_client = ReadOnlySQLDatabase(db_path="data/sqlite.db")
+db_client = ReadOnlySQLDatabase(db_path=settings.SQLITE_DB_PATH)
 
 
 def sql_agent_node(question: str) -> dict:

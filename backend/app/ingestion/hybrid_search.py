@@ -16,6 +16,7 @@ from .deduplication import TextDeduplicator
 from .retrieval_filter import RetrievalFilter
 from ..vectordb.qdrant_client import QdrantDB
 from ..logger import logger
+from ..cache.redis_cache import RedisCache
 
 
 class HybridRetriever:
@@ -26,27 +27,38 @@ class HybridRetriever:
         clip_model_name: str = "openai/clip-vit-base-patch32",
     ):
         """Initialize text embedder, CLIP model and Qdrant client.
-
+ 
         - `text_collection` defaults to the QdrantDB default (omnibrain)
         - `image_collection` defaults to 'omnibrain_vision'
         """
         self.embedder = EmbeddingGenerator()
-
+ 
         # CLIP for text->image retrieval
         self.clip_model_name = clip_model_name
         self.processor = CLIPProcessor.from_pretrained(self.clip_model_name)
         self.clip_model = CLIPModel.from_pretrained(self.clip_model_name)
-
+ 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.clip_model.to(self.device)
-
+ 
         self.retrieval_filter = RetrievalFilter()
         self.deduplicator = TextDeduplicator()
-
+ 
         # Qdrant DB client (single instance can query multiple collections)
         self.db = QdrantDB()
         self.text_collection = text_collection or self.db.collection_name
         self.image_collection = image_collection or "omnibrain_vision"
+ 
+        # Caches search_text() results, keyed by query + params, so an
+        # identical repeated query skips embedding generation and the
+        # Qdrant call entirely. Built defensively: if redis-py isn't
+        # installed or Redis isn't reachable yet, retrieval must still
+        # work uncached rather than fail to construct the retriever.
+        try:
+            self.cache = RedisCache()
+        except Exception as e:
+            logger.warning(f"Redis cache unavailable, continuing without caching: {e}")
+            self.cache = None
 
     def _point_to_dict(self, point: Any) -> Dict[str, Any]:
         """Normalize a returned Qdrant point to a dict.
@@ -84,11 +96,27 @@ class HybridRetriever:
         """Generate a text embedding and search the text collection."""
         if not query or not query.strip():
             return []
-
+ 
+        # Cache lookup happens BEFORE embedding generation and the Qdrant
+        # call -- on a hit, neither of those run at all. This only caches
+        # retrieval results for search_text(); it does not touch
+        # search_images(), the document grader, or the LLM call.
+        cache_params = dict(
+            top_k=top_k,
+            page=page,
+            page_number=page_number,
+            page_numbers=page_numbers,
+            page_range=page_range,
+        )
+        if self.cache is not None:
+            cached_results = self.cache.get(query, **cache_params)
+            if cached_results is not None:
+                return cached_results
+ 
         emb = self.embedder.generate_embedding(query)
         if not emb:
             return []
-
+ 
         try:
             results = self.db.search(
                 query_embedding=emb,
@@ -99,7 +127,12 @@ class HybridRetriever:
                 page_numbers=page_numbers,
                 page_range=page_range,
             )
-            return [self._point_to_dict(p) for p in results]
+            point_dicts = [self._point_to_dict(p) for p in results]
+ 
+            if self.cache is not None:
+                self.cache.set(query, point_dicts, **cache_params)
+ 
+            return point_dicts
         except Exception as e:
             logger.error(f"Text search failed: {e}")
             return []

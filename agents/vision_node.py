@@ -1,30 +1,43 @@
 """
-vision_node.py
+agents/vision_node.py
 
-M4 - Vision Sub-Agent Node
-Reads mixed PDF charts, graphs, and images, and generates text analysis
-using OpenAI Vision LLM. Integrated as a node in LangGraph workflow.
+M4 - Vision Sub-Agent Node.
+
+Single, coherent implementation:
+1. Validate a file_path was provided.
+2. Run blur detection (Day 11 quality check) BEFORE calling the LLM,
+   so we never burn an API call on an unreadable image.
+3. If the image passes, encode it and call the real vision LLM
+   (GPT-4o) using the strict numerical-accuracy system prompt.
+4. On any failure, set image_error / error so the graph's
+   route_after_vision() can divert to the fallback node.
 """
 
 import os
 import base64
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, Optional
+
+import cv2
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from agents.langfuse_tracing import trace_node
 
-from backend.app.config import Settings
+from backend.app.config import settings
 from backend.app.logger import logger
+from agents.prompts import VISION_SYSTEM_PROMPT
 
-settings = Settings()
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def encode_image_to_base64(image_path: str) -> Optional[str]:
-    """Helper function to encode a local image/chart into base64 format."""
+    """Encode a local image/chart into base64 for the vision LLM payload."""
     try:
         if not os.path.exists(image_path):
             logger.error(f"Image path does not exist: {image_path}")
             return None
-            
+
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode("utf-8")
     except Exception as e:
@@ -32,49 +45,51 @@ def encode_image_to_base64(image_path: str) -> Optional[str]:
         return None
 
 
+def detect_blur(image_path: str, threshold: float = 80.0) -> bool:
+    """
+    Computes the Laplacian variance of the image. If variance is below
+    the threshold, the image is considered too blurry to read reliably.
+    """
+    try:
+        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            return True  # Unreadable file -> treat as blurry/broken
+
+        variance = cv2.Laplacian(image, cv2.CV_64F).var()
+        return variance < threshold
+    except Exception:
+        return True
+
+
 class VisionSubAgent:
+    """Wraps the GPT-4o multimodal call for chart/graph analysis."""
+
     def __init__(self, model_name: str = "gpt-4o"):
-        """Initialize the Vision Agent with GPT-4o / Multimodal model."""
         self.llm = ChatOpenAI(
             model=model_name,
             api_key=settings.OPENAI_API_KEY,
-            temperature=0.2,
+            temperature=0.0,  # strict, to avoid hallucinated numbers
         )
 
     def analyze_chart_or_graph(self, user_query: str, image_path: str) -> str:
-        """
-        Encodes the image/chart, passes it to the Multimodal LLM along with the user prompt,
-        and returns detailed text analysis.
-        """
         base64_image = encode_image_to_base64(image_path)
         if not base64_image:
             return "Unable to process the image file. Please verify the image path."
 
-        # System instructions specialized for PDF Charts/Graphs analysis
-        system_prompt = (
-            "You are an expert Data Analyst and Vision AI Specialist. "
-            "Your job is to read and analyze PDF charts, graphs, diagrams, and figures. "
-            "Provide clear, accurate, and structured insights based strictly on the visual data provided. "
-            "If exact numbers/labels are visible in the chart, cite them directly."
-        )
-
-        # Multimodal Message Payload
         messages = [
-            SystemMessage(content=system_prompt),
+            SystemMessage(content=VISION_SYSTEM_PROMPT),
             HumanMessage(
                 content=[
                     {
-                        "type": "text", 
-                        "text": f"User Request: {user_query}\n\nPlease analyze this chart/graph and answer the query."
+                        "type": "text",
+                        "text": f"User Request: {user_query}\n\nPlease analyze this chart/graph and answer the query.",
                     },
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        }
-                    }
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                    },
                 ]
-            )
+            ),
         ]
 
         try:
@@ -86,107 +101,123 @@ class VisionSubAgent:
             return f"Failed to analyze the image due to an error: {str(e)}"
 
 
-# ==========================================
-# 🚀 LangGraph Node Integration Function
-# ==========================================
+# ---------------------------------------------------------------------------
+# LangGraph node
+# ---------------------------------------------------------------------------
 
+@trace_node("vision")
 def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    LangGraph Node for Vision Analysis.
-    Reads `file_path` and last user message from AgentState, 
-    runs visual analysis, and appends the response to `messages`.
+    LangGraph node for vision analysis. Runs blur detection first;
+    only calls the real vision LLM if the image passes quality checks.
     """
-    messages = state.get("messages", [])
     file_path = state.get("file_path")
-    
-    # Extract last user message text
+    messages = state.get("messages", [])
+
+    # 1. Must have a file path at all.
+    if not file_path:
+        return {
+            "image_error": True,
+            "error": "No image or chart file path was provided for vision analysis.",
+        }
+
+    # 2. Blur / quality check (Day 11) — before spending an LLM call.
+    if detect_blur(file_path):
+        return {
+            "image_error": True,
+            "error": "Image is too blurry or table content is unclear. Please provide a higher-resolution document.",
+        }
+
+    # 3. Extract the user's question from the last message, if present.
     user_query = "Summarize and analyze the key insights from this chart."
     if messages:
         last_msg = messages[-1]
-        user_query = last_msg.get("content") if isinstance(last_msg, dict) else getattr(last_msg, "content", user_query)
+        user_query = (
+            last_msg.get("content")
+            if isinstance(last_msg, dict)
+            else getattr(last_msg, "content", user_query)
+        )
 
-    if not file_path:
-        analysis_result = "No image or chart file path was provided for vision analysis."
-    else:
-        agent = VisionSubAgent()
-        analysis_result = agent.analyze_chart_or_graph(user_query=user_query, image_path=file_path)
+    # 4. Real vision call.
+    agent = VisionSubAgent()
+    analysis_result = agent.analyze_chart_or_graph(user_query=user_query, image_path=file_path)
 
-    # Append Assistant response back to State
     new_messages = list(messages)
     new_messages.append({"role": "assistant", "content": analysis_result})
 
     return {
-        **state,
         "messages": new_messages,
-        "next_node": "END"
+        "context": analysis_result,
+        "image_error": False,
     }
-    """
-vision_node.py
+"""
+backend/app/agents/nodes/vision_node.py
 
-Vision Agent Node using ChatOpenAI (GPT-4o) with strict numerical reading rules.
+Vision Sub-Agent execution logic supporting primary vision analysis and Day 12 backup prompt rephrasing.
 """
 
-from typing import Any, Dict
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from backend.app.logger import logger
-from agents.prompts import VISION_SYSTEM_PROMPT  # Importing updated prompt
-
-
-llm_vision = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0.0  # 🎯 Strict zero-temperature to avoid creative hallucination of numbers
+from typing import Any, Dict, Optional
+# pyrefly: ignore [missing-import]
+from agents.prompts.vision_prompts import (
+    PRIMARY_VISION_SYSTEM_PROMPT,
+    BACKUP_VISION_SYSTEM_PROMPT,
+    BACKUP_VISION_USER_TEMPLATE,
 )
 
 
-def vision_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_vision_agent(
+    image_path: str,
+    question: str,
+    vision_llm: Any,
+    use_backup_rephraser: bool = False,
+    raw_previous_output: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    Processes image/visual queries with strict numerical reading rules.
+    Executes the Vision Agent using either the primary extraction model or 
+    the Day 12 backup rephrasing prompt.
     """
-    question = state.get("question", "")
-    file_path = state.get("file_path") or state.get("image_path")
-
-    if not file_path:
-        logger.warning("Vision node invoked without an image/file path.")
-        return {
-            "messages": [
-                HumanMessage(
-                    content="Error: No image or visual file was provided for analysis."
-                )
-            ]
-        }
-
     try:
-        # Construct multimodal input message
-        messages = [
-            SystemMessage(content=VISION_SYSTEM_PROMPT),
-            HumanMessage(
-                content=[
+        if use_backup_rephraser and raw_previous_output:
+            # Day 12 Backup Path: Rephrase existing raw visual text/description
+            user_prompt = BACKUP_VISION_USER_TEMPLATE.format(
+                raw_description=raw_previous_output,
+                question=question
+            )
+            
+            response = await vision_llm.ainvoke([
+                {"role": "system", "content": BACKUP_VISION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ])
+            
+            return {
+                "vision_output": response.content,
+                "is_rephrased": True,
+                "image_error": False,
+            }
+
+        # Primary Path: Direct Multimodal Visual Analysis
+        # (Assuming vision_llm supports vision input with image payload)
+        primary_messages = [
+            {"role": "system", "content": PRIMARY_VISION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
                     {"type": "text", "text": question},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"file://{file_path}"},
-                    },
+                    {"type": "image_url", "image_url": {"url": image_path}}
                 ]
-            ),
+            }
         ]
-
-        logger.info(f"Executing Vision Node for file: {file_path}")
-        response = llm_vision.invoke(messages)
-
+        
+        response = await vision_llm.ainvoke(primary_messages)
         return {
-            "messages": [response],
-            "context": response.content,
-            "next_node": "end",
+            "vision_output": response.content,
+            "is_rephrased": False,
+            "image_error": False,
         }
 
-    except Exception as e:
-        logger.error(f"Vision Agent Node Error: {str(e)}")
+    except Exception as exc:
         return {
-            "messages": [
-                HumanMessage(
-                    content=f"Failed to process visual data accurately: {str(e)}"
-                )
-            ],
-            "next_node": "end",
+            "vision_output": None,
+            "image_error": True,
+            "image_error_message": f"Vision processing failed: {str(exc)}"
         }

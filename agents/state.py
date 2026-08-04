@@ -26,6 +26,14 @@ class GraphState(TypedDict):
 
     # Additional metadata
     metadata: Dict[str, Any]
+    # Parallel execution results
+    sql_result: Optional[Any]
+    retriever_result: Optional[List[str]]
+    merged_context: Optional[List[str]]
+
+    # Self-RAG retry tracking
+    loop_count: int
+    max_loops: int
 
 
 def create_initial_state(question: str) -> GraphState:
@@ -40,4 +48,38 @@ def create_initial_state(question: str) -> GraphState:
         "route": None,
         "error": None,
         "metadata": {},
+        "sql_result": None,
+        "retriever_result": None,
+        "merged_context": [],
+
+        # Self-RAG retry tracking
+        "loop_count": 0,
+        "max_loops": 3,
     }
+from typing import TypedDict, Optional, List, Dict, Any
+
+class AgentState(TypedDict, total=False):
+    messages: List[Dict[str, Any]]
+    file_path: Optional[str]
+    question: Optional[str]
+    # Day 11 Addition for Vision Quality Check:
+    image_error: Optional[bool]
+    image_error_message: Optional[str]
+    """
+agents/state.py
+
+Defines the shared state schema across all agent nodes in LangGraph.
+"""
+
+from typing import Any, Dict, List, TypedDict
+
+
+class GraphState(TypedDict):
+    messages: List[Dict[str, Any]]
+    question: str
+    documents: List[Dict[str, Any]]
+    rewritten_query: str
+    error: str
+    loop_count: int  # Day 12: Tracks retry/rewrite loop executions
+    next_step: str
+    execution_status: str

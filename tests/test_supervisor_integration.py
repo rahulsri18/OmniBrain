@@ -1,3 +1,10 @@
+"""
+test_supervisor_integration.py
+
+Day 9 - M3 Task:
+Integration tests for Supervisor Node routing.
+"""
+
 import os
 import pytest
 
@@ -7,16 +14,17 @@ if os.getenv("OPENAI_API_KEY"):
 
     @pytest.mark.integration
     @pytest.mark.parametrize(
-        "question",
+        "question, expected_route",
         [
-            "Describe the uploaded image.",
-            "Summarize my uploaded PDF.",
-            "Show total sales by region.",
-            "Hello, how are you?"
+            ("Describe the uploaded image.", "vision"),
+            ("Summarize my uploaded PDF.", "retriever"),
+            ("Show total sales by region.", "sql"),
+            ("Count the number of active customers in the database.", "sql"),
+            ("What does page 5 of the contract say about numbers?", "retriever"),  # Explicit test for numerical doc queries
+            ("Hello, how are you?", "general")
         ]
     )
-    def test_real_supervisor(question):
-
+    def test_real_supervisor(question, expected_route):
         state = {
             "question": question,
             "context": []
@@ -25,16 +33,12 @@ if os.getenv("OPENAI_API_KEY"):
         result = router_node(state)
 
         assert "route" in result
-        assert result["route"] in {
-            "vision",
-            "retriever",
-            "sql",
-            "general"
-        }
+        # 🎯 Strict Route Match Assertion
+        assert result["route"] == expected_route, f"Expected {expected_route} for question '{question}', but got {result['route']}"
         assert "context" in result
 
 else:
 
-    @pytest.mark.skip(reason="OPENAI_API_KEY not available")
+    @pytest.mark.skip(reason="OPENAI_API_KEY not available for integration tests")
     def test_real_supervisor():
         pass
