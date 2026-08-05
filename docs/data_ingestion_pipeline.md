@@ -157,3 +157,21 @@ If document grading determines that too few retrieved chunks are relevant, a que
 3.12 Factual Grounding Verification:
 
 After the LLM generates an answer, a grounding verifier checks each factual claim in that answer against the retrieved context, classifying claims as supported, unsupported, or contradicted. Answers with no context, or with grounding below a configurable threshold, are flagged rather than returned as-is — reducing hallucinated or unsupported claims in the final response.
+
+
+4. Components:
+
+File	Responsibility
+parser.py	Extracts raw text from uploaded PDFs.
+chunker.py	Splits extracted text into overlapping, sized chunks.
+embedding.py	Generates normalized embeddings, single-text and batched, via all-MiniLM-L6-v2.
+vector_store.py / qdrant_client.py	Manages the Qdrant client: collection creation, vector insertion, similarity search.
+hybrid_search.py	Combines semantic text search and CLIP-based image search; integrates the Redis cache in front of search_text().
+retrieval_filter.py	Filters out low-relevance results using configurable thresholds.
+deduplication.py	Detects and removes duplicate retrieved chunks via hashing.
+document_grader.py	LLM-powered relevance grading of retrieved chunks (supported/unsupported classification, retry logic, JSON parsing, safe fallbacks).
+query_transformer.py	Rewrites queries into better search terms when retrieval quality is insufficient.
+factual_grounding.py	Verifies that generated answers are supported by retrieved context; flags unsupported or contradicted claims.
+redis_cache.py	Caches retrieval results (get/set/delete/clear) keyed by query + search parameters, with fail-safe fallback if Redis is unavailable.
+vision_pipeline.py	Handles image ingestion/embedding for the multimodal (CLIP-based) retrieval path.
+ban_list.py	Guardrails configuration: categorized keyword lists (abusive, hate, politics, violence, adult, illegal, prompt injection, spam, out-of-scope) consumed by the safety layer ahead of retrieval.
