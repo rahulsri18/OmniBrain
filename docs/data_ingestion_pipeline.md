@@ -131,3 +131,21 @@ Metadata enables scoped retrieval (e.g. searching within a specific page or page
 Database: Qdrant
 Collection: omnibrain (text), omnibrain_vision (images)
 Stored per point: embedding vector, chunk text, metadata payload
+
+3.7 Vector Storage (Qdrant):
+
+Database: Qdrant
+Collection: omnibrain (text), omnibrain_vision (images)
+Stored per point: embedding vector, chunk text, metadata payload
+
+3.8 Hybrid Search Retrieval:
+
+At query time, the retriever generates a query embedding, searches Qdrant for both semantic text matches and CLIP-based text→image matches, deduplicates results, filters out low-relevance matches, and merges everything into a single ranked response.
+
+3.9 Redis Cache Layer:
+
+Before repeating the embed-and-search work, search_text() checks a Redis cache keyed by the normalized query plus its search parameters (top_k, page filters, etc.). On a cache hit, neither embedding generation nor the Qdrant call runs — the cached result is returned directly. On a miss, the search proceeds as normal and the result is cached for next time. The cache fails safe: if Redis is unreachable, retrieval falls through to Qdrant exactly as if no cache existed.
+
+3.10 Document Grader:
+
+An LLM-based relevance grader evaluates each retrieved chunk against the user's question, classifying it as relevant or not before it's passed to generation — reducing noise from chunks that only share surface keywords with the query.
