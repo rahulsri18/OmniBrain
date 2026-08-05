@@ -60,3 +60,21 @@ Responsibility: Extract raw textual content from the uploaded PDF.
 Input: PDF document
 Output: Raw document text (per page)
 Purpose: Prepares the document for downstream chunking and embedding.
+
+3.3 Text Extraction:
+
+Text is pulled out of the parsed PDF structure, preserving page boundaries so later stages (metadata, page-scoped retrieval) can reference where each piece of text came from.
+
+3.4 Text Chunking:
+
+Responsibility: Split extracted text into smaller, semantically coherent chunks sized to fit the embedding model's input limits.
+
+Parameter	Value
+Chunk Size	1000 characters
+Chunk Overlap	200 characters
+
+Benefits:
+
+Preserves context across chunk boundaries
+Improves retrieval accuracy
+Fits embedding model input limits
