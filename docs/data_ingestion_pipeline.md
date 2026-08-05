@@ -149,3 +149,11 @@ Before repeating the embed-and-search work, search_text() checks a Redis cache k
 3.10 Document Grader:
 
 An LLM-based relevance grader evaluates each retrieved chunk against the user's question, classifying it as relevant or not before it's passed to generation — reducing noise from chunks that only share surface keywords with the query.
+
+3.11 Query Transformer:
+
+If document grading determines that too few retrieved chunks are relevant, a query-rewriting helper reformulates the original query into clearer search-oriented terms (expanding abbreviations, resolving vague pronouns, stripping conversational filler) and retrieval is retried with the rewritten query — without ever answering the question itself.
+
+3.12 Factual Grounding Verification:
+
+After the LLM generates an answer, a grounding verifier checks each factual claim in that answer against the retrieved context, classifying claims as supported, unsupported, or contradicted. Answers with no context, or with grounding below a configurable threshold, are flagged rather than returned as-is — reducing hallucinated or unsupported claims in the final response.
