@@ -78,3 +78,56 @@ Benefits:
 Preserves context across chunk boundaries
 Improves retrieval accuracy
 Fits embedding model input limits
+
+3.5 Embedding Generation:
+
+Model: sentence-transformers/all-MiniLM-L6-v2 Output: 384-dimensional, normalized embedding vectors
+
+Chunks are embedded in batches rather than one at a time.
+
+Traditional (one-at-a-time) approach:
+
+text
+Chunk 1 → Model
+Chunk 2 → Model
+Chunk 3 → Model
+...
+
+For a document with 1000 chunks, this means 1000 separate model invocations.
+
+Batched approach:
+
+text
+32 Chunks
+    │
+    ▼
+Embedding Model
+    │
+    ▼
+32 Embeddings
+
+1000 chunks at a batch size of 32 becomes roughly 32 model invocations instead of 1000, producing the same embeddings with substantially less overhead.
+
+Features:
+
+Normalized embeddings (improves cosine similarity search)
+Configurable batch size (constructor default, overridable per call)
+Empty/whitespace chunks are skipped before encoding, with output-list length always matching input-list length so downstream code can zip embeddings back to their original chunks safely
+3.6 Metadata Generation
+
+Each chunk is stored alongside metadata describing where it came from:
+
+json
+{
+    "file_name": "sample.pdf",
+    "page": 5,
+    "chunk_index": 12
+}
+
+Metadata enables scoped retrieval (e.g. searching within a specific page or page range).
+
+3.7 Vector Storage (Qdrant):
+
+Database: Qdrant
+Collection: omnibrain (text), omnibrain_vision (images)
+Stored per point: embedding vector, chunk text, metadata payload
