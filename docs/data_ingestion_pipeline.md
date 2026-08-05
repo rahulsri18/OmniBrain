@@ -204,3 +204,36 @@ Parameter	Default
 Grounded score threshold	0.7
 Grader relevance threshold	0.5
 Max retries (LLM calls)	2
+
+6. Storage Structure:
+
+Each Qdrant point stores:
+
+json
+{
+    "id": "<point id>",
+    "vector": [0.01, -0.02, ...],
+    "payload": {
+        "text": "<chunk text>",
+        "file_name": "sample.pdf",
+        "page": 5,
+        "chunk_index": 12
+    }
+}
+
+Redis cache entries store the serialized retrieval result under a key derived from a hash of the normalized query and its search parameters, with a configurable TTL.
+
+7. Error Handling:
+
+The ingestion and retrieval pipeline handles the following scenarios:
+
+Empty PDF files
+Empty or whitespace-only text chunks (skipped before embedding, with output alignment preserved)
+Embedding generation failures
+Qdrant connection failures
+Invalid or missing metadata
+Batch processing errors
+Redis cache unavailable (fails safe — falls through to Qdrant)
+LLM API failures in the grader, query transformer, and grounding verifier (retried with backoff, then a configurable fallback policy)
+Malformed/unparsable LLM JSON output (treated as a safe default rather than raising)
+No retrieved context at generation time (grounding verifier fails closed rather than assuming grounded)
