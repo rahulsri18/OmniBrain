@@ -255,3 +255,17 @@ Distributed embedding generation
 OCR support for scanned PDFs
 Automatic duplicate document detection
 Caching embeddings and/or LLM outputs (explicitly out of scope for the current retrieval-result cache)
+
+10. Technologies Used:
+
+Python
+Sentence Transformers
+PyTorch
+Qdrant
+Redis
+Anthropic Claude API
+CLIP (openai/clip-vit-base-patch32)
+
+11. Conclusion:
+
+The data ingestion pipeline forms the foundation of the OmniBrain Retrieval-Augmented Generation system. It transforms uploaded PDF documents into searchable semantic vectors while preserving document context and metadata, and pairs that with a hybrid retrieval layer that grades relevance, rewrites poor queries, caches repeated searches, and verifies that generated answers stay grounded in retrieved context. Together these stages improve indexing throughput, retrieval precision, and answer reliability for downstream question-answering tasks.
