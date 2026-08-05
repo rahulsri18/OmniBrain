@@ -175,3 +175,32 @@ factual_grounding.py	Verifies that generated answers are supported by retrieved 
 redis_cache.py	Caches retrieval results (get/set/delete/clear) keyed by query + search parameters, with fail-safe fallback if Redis is unavailable.
 vision_pipeline.py	Handles image ingestion/embedding for the multimodal (CLIP-based) retrieval path.
 ban_list.py	Guardrails configuration: categorized keyword lists (abusive, hate, politics, violence, adult, illegal, prompt injection, spam, out-of-scope) consumed by the safety layer ahead of retrieval.
+
+5. Configuration:
+
+Embedding Configuration
+Parameter	Value
+Model	all-MiniLM-L6-v2
+Vector Size	384
+Batch Size	32 (configurable)
+Chunking Configuration
+Parameter	Value
+Chunk Size	1000
+Chunk Overlap	200
+Qdrant Configuration
+Parameter	Default
+Host	localhost
+Port	6333
+Collection	omnibrain (text), omnibrain_vision (images)
+Redis Cache Configuration
+Parameter	Default
+Host	localhost
+Port	6379
+DB	0
+TTL	300 seconds
+Key Prefix	retrieval_cache
+Grounding / Grading Configuration
+Parameter	Default
+Grounded score threshold	0.7
+Grader relevance threshold	0.5
+Max retries (LLM calls)	2
