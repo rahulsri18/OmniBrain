@@ -237,3 +237,21 @@ Redis cache unavailable (fails safe — falls through to Qdrant)
 LLM API failures in the grader, query transformer, and grounding verifier (retried with backoff, then a configurable fallback policy)
 Malformed/unparsable LLM JSON output (treated as a safe default rather than raising)
 No retrieved context at generation time (grounding verifier fails closed rather than assuming grounded)
+
+8. Performance Optimizations:
+
+Batch embedding generation — reduces model invocations from one-per-chunk to one-per-batch.
+Configurable batch size — tunable based on available CPU/GPU memory.
+Normalized embeddings — improves cosine similarity search quality.
+Redis caching of retrieval results — repeated identical queries skip embedding generation and the Qdrant call entirely.
+Metadata storage — supports efficient page-level and scoped retrieval without full-collection scans.
+
+9. Future Improvements:
+
+Asynchronous ingestion pipeline
+Incremental document updates
+Parallel PDF processing
+Distributed embedding generation
+OCR support for scanned PDFs
+Automatic duplicate document detection
+Caching embeddings and/or LLM outputs (explicitly out of scope for the current retrieval-result cache)
