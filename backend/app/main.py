@@ -77,11 +77,27 @@ async def timeout_middleware(request, call_next):
         )
 
 
-@app.get("/")
+@app.get(
+    "/",
+    summary="Health Check",
+    description="Checks whether the OmniBrain backend server is running.",
+    response_description="Server status message"
+)
 def home():
     return {"message": "Server is running"}
 
-@app.post("/api/v1/upload")
+@app.post(
+    "/api/v1/upload",
+    summary="Upload PDF",
+    description="Uploads a PDF document for background ingestion into the knowledge base.",
+    response_description="Upload accepted successfully.",
+    responses={
+        200: {"description": "PDF uploaded successfully"},
+        400: {"description": "Invalid file type"},
+        413: {"description": "File size exceeds 50 MB"},
+        429: {"description": "Too many upload requests"}
+    }
+)
 @limiter.limit("10/minute")
 async def upload_file(
     request: Request,
@@ -166,7 +182,17 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
         yield chunk
 
 
-@app.post("/api/v1/chat")
+@app.post(
+    "/api/v1/chat",
+    summary="Chat",
+    description="Processes user queries and streams AI-generated responses.",
+    response_description="Streaming chat response",
+    responses={
+        200: {"description": "Chat response generated successfully"},
+        400: {"description": "Invalid request"},
+        429: {"description": "Too many requests"}
+    }
+)
 @limiter.limit("30/minute")
 async def chat(
     request: Request,
@@ -193,7 +219,12 @@ async def chat(
     )
 
 
-@app.get("/api/v1/status")
+@app.get(
+    "/api/v1/status",
+    summary="Execution Status",
+    description="Returns the current execution status of background tasks.",
+    response_description="Execution status"
+)
 async def execution_status():
     """Live execution status endpoint."""
     return {
@@ -202,7 +233,12 @@ async def execution_status():
     }
 
 
-@app.get("/api/v1/telemetry")
+@app.get(
+    "/api/v1/telemetry",
+    summary="Telemetry",
+    description="Returns backend telemetry and runtime metrics.",
+    response_description="Telemetry information"
+)
 async def telemetry(session_id: str = Query(None, description="Optional session ID to fetch rewrite metrics")):
     """Telemetry endpoint for query rewrite statistics."""
     if session_id:
