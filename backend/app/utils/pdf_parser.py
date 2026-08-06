@@ -6,6 +6,8 @@ Utility functions for extracting text, tables, and metadata from PDF files.
 
 from pathlib import Path
 import pdfplumber
+from pdfminer.pdfdocument import PDFPasswordIncorrect
+from pdfminer.pdfparser import PDFSyntaxError
 
 
 class PDFParser:
