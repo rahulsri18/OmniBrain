@@ -6,13 +6,15 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from .middleware.rate_limiter import limiter
 from app.core.exceptions import GuardrailViolation
+from app.core.security import verify_api_key
 from app.services.session_manager import session_manager
 from app.utils.stream_formatter import stream_formatter
 from .services.ingestion_service import IngestionService
 from .sql_agent.schema import ChatRequest
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
-from fastapi import Request
+from fastapi import Depends
+
 
 # Import compiled graph safely
 try:
@@ -101,7 +103,9 @@ def home():
 @limiter.limit("10/minute")
 async def upload_file(
     request: Request,
-    background_tasks: BackgroundTasks, file: UploadFile = File(...)
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    api_key: str = Depends(verify_api_key),
 ):
     is_pdf_mime = file.content_type == "application/pdf"
     is_pdf_ext = file.filename.lower().endswith(".pdf")
@@ -196,7 +200,9 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
 @limiter.limit("30/minute")
 async def chat(
     request: Request,
-    chat_request: ChatRequest):
+    chat_request: ChatRequest,
+    api_key: str = Depends(verify_api_key),
+):
     """Clean Single Route for Chat Streaming with Error Guardrails."""
     # Optional synchronous guardrail check before starting stream
     # if is_violating_guardrail(request.message):
@@ -225,7 +231,9 @@ async def chat(
     description="Returns the current execution status of background tasks.",
     response_description="Execution status"
 )
-async def execution_status():
+async def execution_status(
+    api_key: str = Depends(verify_api_key),
+):
     """Live execution status endpoint."""
     return {
         "status": "grading",
@@ -239,7 +247,10 @@ async def execution_status():
     description="Returns backend telemetry and runtime metrics.",
     response_description="Telemetry information"
 )
-async def telemetry(session_id: str = Query(None, description="Optional session ID to fetch rewrite metrics")):
+async def telemetry(
+    session_id: str = Query(None),
+    api_key: str = Depends(verify_api_key),
+):
     """Telemetry endpoint for query rewrite statistics."""
     if session_id:
         session = session_manager.get_session(session_id)
