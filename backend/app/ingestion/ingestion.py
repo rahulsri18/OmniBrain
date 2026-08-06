@@ -39,6 +39,8 @@ class IngestionPipeline:
 
         if not pdf_path.exists():
             raise FileNotFoundError(f"{pdf_path} not found.")
+        if pdf_path.stat().st_size == 0:
+            raise ValueError("Uploaded PDF is empty.")
 
         print("=" * 60)
         print("Starting PDF Ingestion Pipeline")
