@@ -6,8 +6,6 @@ overlapping chunks for embedding generation and retrieval.
 """
 
 import os
-import os
-from typing import List, Dict
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -20,8 +18,8 @@ class TextChunker:
 
     def __init__(
         self,
-        chunk_size: int = None,
-        chunk_overlap: int = None,
+        chunk_size: int | None = None,
+        chunk_overlap: int | None = None,
         min_chunk_length: int = 30,
     ):
         """
@@ -41,10 +39,7 @@ class TextChunker:
             raise ValueError("chunk_overlap cannot be negative.")
 
         if self.chunk_overlap >= self.chunk_size:
-            raise ValueError(
-                "chunk_overlap must be smaller than chunk_size."
-            )
-
+            raise ValueError("chunk_overlap must be smaller than chunk_size.")
 
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
@@ -63,7 +58,7 @@ class TextChunker:
             keep_separator=True,
         )
 
-    def split_text(self, text: str) -> List[str]:
+    def split_text(self, text: str) -> list[str]:
         """
         Split a single document into optimized chunks.
         """
@@ -77,15 +72,11 @@ class TextChunker:
         chunks = [chunk.strip() for chunk in chunks]
 
         # Remove tiny chunks
-        chunks = [
-            chunk
-            for chunk in chunks
-            if len(chunk) >= self.min_chunk_length
-        ]
+        chunks = [chunk for chunk in chunks if len(chunk) >= self.min_chunk_length]
 
         return chunks
 
-    def split_documents(self, documents: List[str]) -> List[str]:
+    def split_documents(self, documents: list[str]) -> list[str]:
         """
         Split multiple documents into chunks.
         """
@@ -109,8 +100,8 @@ class TextChunker:
 
     def get_chunk_statistics(
         self,
-        chunks: List[str],
-    ) -> Dict:
+        chunks: list[str],
+    ) -> dict:
         """
         Return useful statistics.
         """
@@ -141,7 +132,7 @@ class TextChunker:
             "overlap_percentage": self.overlap_percentage(),
         }
 
-    def print_statistics(self, chunks: List[str]) -> None:
+    def print_statistics(self, chunks: list[str]) -> None:
         """
         Print chunk statistics.
         """
@@ -157,3 +148,48 @@ class TextChunker:
         print(f"Largest Chunk       : {stats['largest_chunk']}")
         print(f"Smallest Chunk      : {stats['smallest_chunk']}")
         print("======================================\n")
+
+
+# app/ingestion/chunker.py
+
+import logging
+from typing import Any
+
+logger = logging.getLogger("omnibrain.m1.chunker")
+
+
+class DocumentChunker:
+    """Splits raw page text into overlapping semantic chunks for vector indexing."""
+
+    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50) -> None:
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            separators=["\n\n", "\n", " ", ""],
+        )
+
+    def process_pages(self, parsed_pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Transforms page-level data into indexable chunks with page metadata."""
+        chunked_records: list[dict[str, Any]] = []
+        global_chunk_id = 0
+
+        for page in parsed_pages:
+            page_number = page.get("page_number", 0)
+            raw_text = page.get("content", "")
+
+            sub_chunks = self.splitter.split_text(raw_text)
+            for idx, chunk_text in enumerate(sub_chunks):
+                global_chunk_id += 1
+                chunked_records.append(
+                    {
+                        "chunk_id": f"p{page_number}_c{idx + 1}",
+                        "global_index": global_chunk_id,
+                        "page_number": page_number,
+                        "text": chunk_text,
+                    }
+                )
+
+        logger.info(
+            f"Generated {len(chunked_records)} total chunks across parsed pages."
+        )
+        return chunked_records

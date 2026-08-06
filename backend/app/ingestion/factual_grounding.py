@@ -1,4 +1,4 @@
-""""
+""" "
 Verifies that a generated answer is actually supported by the retrieved PDF
 context, to catch hallucinations before a response is returned to the user.
 Sits after generation in the pipeline, alongside document_grader.py and
@@ -25,8 +25,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # Bump when GROUNDING_SYSTEM_PROMPT's wording changes meaningfully, same
 # convention as GRADER_PROMPT_VERSION / TRANSFORMER_PROMPT_VERSION.
@@ -86,11 +85,13 @@ NO_CONTEXT_PLACEHOLDER = "(no context was retrieved)"
 class GroundingResult:
     grounded: bool
     grounding_score: float
-    supported_claims: List[str] = field(default_factory=list)
-    unsupported_claims: List[str] = field(default_factory=list)
-    contradicted_claims: List[str] = field(default_factory=list)
+    supported_claims: list[str] = field(default_factory=list)
+    unsupported_claims: list[str] = field(default_factory=list)
+    contradicted_claims: list[str] = field(default_factory=list)
     explanation: str = ""
-    ungraded: bool = False  # True if verification failed after retries (transient error)
+    ungraded: bool = (
+        False  # True if verification failed after retries (transient error)
+    )
     prompt_version: str = GROUNDING_PROMPT_VERSION
 
 
@@ -108,18 +109,20 @@ class GroundingVerifier:
     def __init__(
         self,
         llm_client: Any = None,
-        model: Optional[str] = None,
-        call_fn: Optional[Any] = None,
+        model: str | None = None,
+        call_fn: Any | None = None,
         max_retries: int = 2,
         retry_backoff_seconds: float = 1.0,
-        request_timeout: Optional[float] = 15.0,
+        request_timeout: float | None = 15.0,
         grounded_score_threshold: float = 0.7,
         on_ungraded: str = "not_grounded",  # "not_grounded" | "grounded" | "raise"
     ):
         if llm_client is None and call_fn is None:
             raise ValueError("Provide either llm_client or call_fn")
         if on_ungraded not in ("not_grounded", "grounded", "raise"):
-            raise ValueError("on_ungraded must be 'not_grounded', 'grounded', or 'raise'")
+            raise ValueError(
+                "on_ungraded must be 'not_grounded', 'grounded', or 'raise'"
+            )
 
         self.llm_client = llm_client
         self.model = model or os.environ.get("GROUNDING_MODEL", DEFAULT_GROUNDING_MODEL)
@@ -171,20 +174,22 @@ class GroundingVerifier:
     # --- LLM call with retry ----------------------------------------------
 
     def _call_llm(self, answer: str, context_text: str) -> str:
-        user_prompt = GROUNDING_USER_TEMPLATE.format(answer=answer, context=context_text)
+        user_prompt = GROUNDING_USER_TEMPLATE.format(
+            answer=answer, context=context_text
+        )
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
                 if self.call_fn is not None:
                     return self.call_fn(GROUNDING_SYSTEM_PROMPT, user_prompt)
 
-                kwargs: Dict[str, Any] = dict(
-                    model=self.model,
-                    max_tokens=600,
-                    system=GROUNDING_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                )
+                kwargs: dict[str, Any] = {
+                    "model": self.model,
+                    "max_tokens": 600,
+                    "system": GROUNDING_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": user_prompt}],
+                }
                 if self.request_timeout is not None:
                     kwargs["timeout"] = self.request_timeout
 
@@ -193,17 +198,19 @@ class GroundingVerifier:
                     if getattr(block, "type", None) == "text":
                         return block.text
                 return ""
-            except Exception as exc:  # noqa: BLE001 - deliberately broad, see retry policy
+            except (
+                Exception # noqa: BLE001
+            ) as exc:
                 last_error = exc
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    time.sleep(self.retry_backoff_seconds * (2**attempt))
                     continue
                 raise last_error
 
     # --- parsing ------------------------------------------------------------
 
     @staticmethod
-    def _coerce_str_list(value: Any) -> List[str]:
+    def _coerce_str_list(value: Any) -> list[str]:
         if not isinstance(value, list):
             return []
         return [str(item) for item in value if str(item).strip()]
@@ -298,7 +305,7 @@ class GroundingVerifier:
         try:
             raw = self._call_llm(answer, context_text)
             result = self._parse_result(raw)
-        except Exception as exc:  # noqa: BLE001 - retries already exhausted upstream
+        except Exception as exc:
             if self.on_ungraded == "raise":
                 raise
             fallback_grounded = self.on_ungraded == "grounded"
@@ -312,5 +319,7 @@ class GroundingVerifier:
         # Apply the configurable threshold on top of the model's own
         # "grounded" boolean -- a borderline score shouldn't pass just
         # because the model itself said true.
-        result.grounded = result.grounded and result.grounding_score >= self.grounded_score_threshold
+        result.grounded = (
+            result.grounded and result.grounding_score >= self.grounded_score_threshold
+        )
         return result

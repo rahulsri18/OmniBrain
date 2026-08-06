@@ -6,49 +6,50 @@ semantic text matches and CLIP text->image matches.
 
 Usage: create `HybridRetriever()` and call `retrieve(query, ...)`.
 """
-from typing import List, Dict, Any
+
+from typing import Any
 
 import torch
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPModel, CLIPProcessor
 
-from .embedding import EmbeddingGenerator
-from .deduplication import TextDeduplicator
-from .retrieval_filter import RetrievalFilter
-from ..vectordb.qdrant_client import QdrantDB
-from ..logger import logger
 from ..cache.redis_cache import RedisCache
+from ..logger import logger
+from ..vectordb.qdrant_client import QdrantDB
+from .deduplication import TextDeduplicator
+from .embedding import EmbeddingGenerator
+from .retrieval_filter import RetrievalFilter
 
 
 class HybridRetriever:
     def __init__(
         self,
-        text_collection: str = None,
-        image_collection: str = None,
+        text_collection: str | None = None,
+        image_collection: str | None = None,
         clip_model_name: str = "openai/clip-vit-base-patch32",
     ):
         """Initialize text embedder, CLIP model and Qdrant client.
- 
+
         - `text_collection` defaults to the QdrantDB default (omnibrain)
         - `image_collection` defaults to 'omnibrain_vision'
         """
         self.embedder = EmbeddingGenerator()
- 
+
         # CLIP for text->image retrieval
         self.clip_model_name = clip_model_name
         self.processor = CLIPProcessor.from_pretrained(self.clip_model_name)
         self.clip_model = CLIPModel.from_pretrained(self.clip_model_name)
- 
+
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.clip_model.to(self.device)
- 
+
         self.retrieval_filter = RetrievalFilter()
         self.deduplicator = TextDeduplicator()
- 
+
         # Qdrant DB client (single instance can query multiple collections)
         self.db = QdrantDB()
         self.text_collection = text_collection or self.db.collection_name
         self.image_collection = image_collection or "omnibrain_vision"
- 
+
         # Caches search_text() results, keyed by query + params, so an
         # identical repeated query skips embedding generation and the
         # Qdrant call entirely. Built defensively: if redis-py isn't
@@ -56,11 +57,11 @@ class HybridRetriever:
         # work uncached rather than fail to construct the retriever.
         try:
             self.cache = RedisCache()
-        except Exception as e:
+        except Exception as e: # noqa: BLE001
             logger.warning(f"Redis cache unavailable, continuing without caching: {e}")
             self.cache = None
 
-    def _point_to_dict(self, point: Any) -> Dict[str, Any]:
+    def _point_to_dict(self, point: Any) -> dict[str, Any]:
         """Normalize a returned Qdrant point to a dict.
 
         Supports both attribute objects and plain dicts.
@@ -77,7 +78,7 @@ class HybridRetriever:
             score = getattr(point, "score", None)
             if score is None and isinstance(point, dict):
                 score = point.get("score")
-        except Exception:
+        except Exception: # noqa: BLE001
             pid = point.get("id") if isinstance(point, dict) else None
             payload = point.get("payload") if isinstance(point, dict) else None
             score = point.get("score") if isinstance(point, dict) else None
@@ -92,31 +93,31 @@ class HybridRetriever:
         page_number: int | None = None,
         page_numbers: list[int] | None = None,
         page_range: tuple[int, int] | None = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generate a text embedding and search the text collection."""
         if not query or not query.strip():
             return []
- 
+
         # Cache lookup happens BEFORE embedding generation and the Qdrant
         # call -- on a hit, neither of those run at all. This only caches
         # retrieval results for search_text(); it does not touch
         # search_images(), the document grader, or the LLM call.
-        cache_params = dict(
-            top_k=top_k,
-            page=page,
-            page_number=page_number,
-            page_numbers=page_numbers,
-            page_range=page_range,
-        )
+        cache_params = {
+            "top_k": top_k,
+            "page": page,
+            "page_number": page_number,
+            "page_numbers": page_numbers,
+            "page_range": page_range,
+        }
         if self.cache is not None:
             cached_results = self.cache.get(query, **cache_params)
             if cached_results is not None:
                 return cached_results
- 
+
         emb = self.embedder.generate_embedding(query)
         if not emb:
             return []
- 
+
         try:
             results = self.db.search(
                 query_embedding=emb,
@@ -128,12 +129,12 @@ class HybridRetriever:
                 page_range=page_range,
             )
             point_dicts = [self._point_to_dict(p) for p in results]
- 
+
             if self.cache is not None:
                 self.cache.set(query, point_dicts, **cache_params)
- 
+
             return point_dicts
-        except Exception as e:
+        except Exception as e: # noqa: BLE001
             logger.error(f"Text search failed: {e}")
             return []
 
@@ -145,7 +146,7 @@ class HybridRetriever:
         page_number: int | None = None,
         page_numbers: list[int] | None = None,
         page_range: tuple[int, int] | None = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generate a CLIP text embedding and search the image collection."""
         if not query or not query.strip():
             return []
@@ -162,9 +163,15 @@ class HybridRetriever:
                 text_feats = text_out
             else:
                 # try common attributes
-                if hasattr(text_out, "pooler_output") and text_out.pooler_output is not None:
+                if (
+                    hasattr(text_out, "pooler_output")
+                    and text_out.pooler_output is not None
+                ):
                     text_feats = text_out.pooler_output
-                elif hasattr(text_out, "last_hidden_state") and text_out.last_hidden_state is not None:
+                elif (
+                    hasattr(text_out, "last_hidden_state")
+                    and text_out.last_hidden_state is not None
+                ):
                     text_feats = text_out.last_hidden_state[:, 0, :]
                 else:
                     # fallback: try to convert to tensor
@@ -185,21 +192,25 @@ class HybridRetriever:
                     page_range=page_range,
                 )
                 return [self._point_to_dict(p) for p in results]
-            except Exception as qe:
+            except Exception as qe: # noqa: BLE001
                 # If the image collection does not exist, create it (empty) so future ingestions can populate it.
                 err = str(qe)
                 if "doesn't exist" in err or "not found" in err.lower():
-                    logger.info(f"Image collection '{self.image_collection}' not found. Creating empty collection.")
+                    logger.info(
+                        f"Image collection '{self.image_collection}' not found. Creating empty collection."
+                    )
                     try:
                         # CLIP embeddings are 512-dim
-                        self.db.create_collection(collection_name=self.image_collection, vector_size=512)
-                    except Exception as ce:
+                        self.db.create_collection(
+                            collection_name=self.image_collection, vector_size=512
+                        )
+                    except Exception as ce: # noqa: BLE001
                         logger.error(f"Failed to create image collection: {ce}")
                 else:
                     logger.error(f"Image search (CLIP) failed: {qe}")
 
                 return []
-        except Exception as e:
+        except Exception as e: # noqa: BLE001
             logger.error(f"Image search (CLIP) failed: {e}")
             return []
 
@@ -212,7 +223,7 @@ class HybridRetriever:
         page_number: int | None = None,
         page_numbers: list[int] | None = None,
         page_range: tuple[int, int] | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run both text and image retrieval and return merged response."""
         if page_number is None:
             page_number = page
@@ -251,7 +262,10 @@ class HybridRetriever:
         # Sort by score (descending). Missing scores go to the end.
         merged_sorted = sorted(
             merged,
-            key=lambda x: (x.get("score") is not None, x.get("score") if x.get("score") is not None else -9999),
+            key=lambda x: (
+                x.get("score") is not None,
+                x.get("score") if x.get("score") is not None else -9999,
+            ),
             reverse=True,
         )
 

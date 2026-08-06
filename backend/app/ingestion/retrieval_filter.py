@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from ..config import settings
 
@@ -21,9 +22,9 @@ class RetrievalFilter:
             return result.get("score")
         return getattr(result, "score", None)
 
-    def filter_results(self, results: Sequence[Any] | None) -> List[Any]:
+    def filter_results(self, results: Sequence[Any] | None) -> list[Any]:
         """Keep only results whose score meets or exceeds the threshold."""
-        filtered: List[Any] = []
+        filtered: list[Any] = []
 
         for result in results or []:
             score = self._get_score(result)
@@ -41,7 +42,7 @@ class RetrievalFilter:
 
         return filtered
 
-    def sort_results(self, results: Sequence[Any] | None) -> List[Any]:
+    def sort_results(self, results: Sequence[Any] | None) -> list[Any]:
         """Sort results in descending order by score."""
 
         def sort_key(result: Any) -> tuple[bool, float]:
@@ -54,4 +55,4 @@ class RetrievalFilter:
             except (TypeError, ValueError):
                 return (False, float("-inf"))
 
-        return sorted(list(results or []), key=sort_key, reverse=True)
+        return sorted(results or [], key=sort_key, reverse=True)
