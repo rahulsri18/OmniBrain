@@ -21,6 +21,26 @@ class PDFParser:
         if not self.pdf_path.exists():
             raise FileNotFoundError(f"PDF not found: {self.pdf_path}")
 
+        if self.pdf_path.stat().st_size == 0:
+            raise ValueError("Uploaded PDF is empty.")
+
+    # Validate the PDF during initialization
+        try:
+            with pdfplumber.open(self.pdf_path) as pdf:
+                _ = len(pdf.pages)
+        except PDFPasswordIncorrect:
+            raise ValueError(
+            "Password-protected PDFs are not supported."
+        )
+        except PDFSyntaxError:
+            raise ValueError(
+            "The PDF is corrupted or has an invalid format."
+        )
+        except Exception as e:
+            raise ValueError(
+            f"Unable to open PDF: {e}"
+        )
+
     def extract_text(self) -> str:
         """
         Extract complete text from the PDF.
