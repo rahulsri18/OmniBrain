@@ -5,9 +5,10 @@ Optimized Image Embedding Loader with FP16 Precision, Lazy Loading & RAM Offload
 
 import gc
 import logging
-from typing import List, Optional
-from PIL import Image
+from typing import Optional
+
 import torch
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class OptimizedVisionEmbedder:
     def __new__(cls, *args, **kwargs):
         """Singleton pattern to avoid loading duplicate model instances in RAM."""
         if cls._instance is None:
-            cls._instance = super(OptimizedVisionEmbedder, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
@@ -32,14 +33,18 @@ class OptimizedVisionEmbedder:
         self.preprocess = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._initialized = True
-        logger.info(f"VisionEmbedder initialized in Lazy mode for device: {self.device}")
+        logger.info(
+            f"VisionEmbedder initialized in Lazy mode for device: {self.device}"
+        )
 
     def _load_model(self):
         """Lazy loader: Loads model only when first embedding request arrives."""
         if self.model is not None:
             return
 
-        logger.info("Loading CLIP model into memory with FP16 / Half Precision optimization...")
+        logger.info(
+            "Loading CLIP model into memory with FP16 / Half Precision optimization..."
+        )
 
         try:
             import open_clip
@@ -64,11 +69,11 @@ class OptimizedVisionEmbedder:
             logger.info("CLIP model loaded successfully into optimized memory space.")
 
         except Exception as e:
-            logger.error(f"Failed to load vision embedder: {str(e)}")
-            raise e
+            logger.error(f"Failed to load vision embedder: {e!s}")
+            raise # Bare raise preserves the stack trace
 
     @torch.inference_mode()
-    def embed_image(self, image_input: Image.Image) -> List[float]:
+    def embed_image(self, image_input: Image.Image) -> list[float]:
         """Generates embedding for a PIL Image using minimal memory footprint."""
         self._load_model()
 

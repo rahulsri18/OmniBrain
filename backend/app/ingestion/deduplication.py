@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 
 class TextDeduplicator:
@@ -89,7 +90,11 @@ class TextDeduplicator:
             deduped,
             key=lambda item: (
                 self._get_score(item) is not None,
-                self._get_score(item) if self._get_score(item) is not None else float("-inf"),
+                (
+                    self._get_score(item)
+                    if self._get_score(item) is not None
+                    else float("-inf")
+                ),
             ),
             reverse=True,
         )

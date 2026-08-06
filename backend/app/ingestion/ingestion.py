@@ -11,15 +11,15 @@ PDF
 └── Extract Images → Filter Low-Quality → Generate CLIP Embeddings → Store in Qdrant (512-dim)
 """
 
-import os
 from pathlib import Path
+
 from ..utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
-from .chunker import TextChunker
-from .embedding import EmbeddingGenerator
-from ..vectordb.qdrant_client import QdrantDB
 
 # 🚀 M4 विज़न मॉड्यूल इम्पोर्ट्स
 from ..utils.vision_extractor import PDFVisionExtractor
+from ..vectordb.qdrant_client import QdrantDB
+from .chunker import TextChunker
+from .embedding import EmbeddingGenerator
 from .vision_pipeline import VisionIngestionPipeline
 
 
@@ -55,7 +55,7 @@ class IngestionPipeline:
         pagewise_text = None
         try:
             pagewise_text = parser.extract_pagewise_text()
-        except Exception:
+        except Exception:  # noqa: BLE001
             pagewise_text = None
 
         if isinstance(pagewise_text, list) and pagewise_text:
@@ -106,7 +106,7 @@ class IngestionPipeline:
                         "file_name": pdf_path.name,
                         "chunk": i + 1,
                         "text": chunk,
-                        "type": "text"
+                        "type": "text",
                     }
                     for i, chunk in enumerate(chunks)
                 ]
@@ -131,7 +131,7 @@ class IngestionPipeline:
         # 🚀 भाग 2: विज़न इनजेशन फ्लो (M4 Vision Ingestion Flow)
         # =========================================================
         print("\n--- Processing Visual Content (Images/Charts) ---")
-        
+
         # 1. PDF से इमेज निकालो और लो-क्वालिटी फ़िल्टर करो (Day 2 & Day 5)
         extracted_images = self.vision_extractor.extract_images_from_pdf(str(pdf_path))
         print(f"Extracted {len(extracted_images)} high-quality charts/images.")
@@ -140,8 +140,7 @@ class IngestionPipeline:
         if extracted_images:
             print("Processing image features via CLIP and saving to Qdrant...")
             self.vision_pipeline.ingest_extracted_images(
-                image_paths=extracted_images,
-                original_pdf_name=pdf_path.name
+                image_paths=extracted_images, original_pdf_name=pdf_path.name
             )
         else:
             print("No high-quality images found to process.")
