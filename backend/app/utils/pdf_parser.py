@@ -5,6 +5,7 @@ Utility functions for extracting text, tables, and metadata from PDF files.
 """
 
 from pathlib import Path
+from pydoc import text
 import pdfplumber
 from pdfminer.pdfdocument import PDFPasswordIncorrect
 from pdfminer.pdfparser import PDFSyntaxError
@@ -43,17 +44,21 @@ class PDFParser:
 
     def extract_text(self) -> str:
         """
-        Extract complete text from the PDF.
+          Extract complete text from the PDF.
         """
 
         text = ""
 
-        with pdfplumber.open(self.pdf_path) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
+        try:
+            with pdfplumber.open(self.pdf_path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
 
-                if page_text:
-                    text += page_text + "\n"
+                    if page_text:
+                        text += page_text + "\n"
+
+        except Exception as e:
+            raise ValueError(f"Failed to extract text: {e}")
 
         return text.strip()
 
