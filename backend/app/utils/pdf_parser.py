@@ -81,24 +81,23 @@ class PDFParser:
         return pages
 
     def extract_tables(self):
-        """
-        Extract tables from every page.
-        """
-
         all_tables = []
 
-        with pdfplumber.open(self.pdf_path) as pdf:
-            for index, page in enumerate(pdf.pages, start=1):
+        try:
+            with pdfplumber.open(self.pdf_path) as pdf:
+                for index, page in enumerate(pdf.pages, start=1):
+                    tables = page.extract_tables()
 
-                tables = page.extract_tables()
-
-                if tables:
-                    all_tables.append(
-                        {
-                            "page": index,
-                            "tables": tables
-                        }
+                    if tables:
+                        all_tables.append(
+                            {
+                                "page": index,
+                                "tables": tables
+                            }
                     )
+
+        except Exception as e:
+            raise ValueError(f"Failed to extract tables: {e}")
 
         return all_tables
 
