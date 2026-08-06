@@ -62,22 +62,21 @@ class PDFParser:
 
         return text.strip()
 
+    
     def extract_pagewise_text(self):
-        """
-        Extract text page by page.
-        """
-
         pages = []
 
-        with pdfplumber.open(self.pdf_path) as pdf:
-            for index, page in enumerate(pdf.pages, start=1):
-
-                pages.append(
-                    {
-                        "page": index,
-                        "text": page.extract_text() or ""
-                    }
-                )
+        try:
+            with pdfplumber.open(self.pdf_path) as pdf:
+                for index, page in enumerate(pdf.pages, start=1):
+                    pages.append(
+                        {
+                            "page": index,
+                            "text": page.extract_text() or ""
+                        }
+                    )
+        except Exception as e:
+            raise ValueError(f"Failed to extract page-wise text: {e}")
 
         return pages
 
