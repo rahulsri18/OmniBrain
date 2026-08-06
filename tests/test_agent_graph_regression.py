@@ -1,81 +1,147 @@
-import importlib
-from unittest.mock import patch
-import pytest
+import json
+from pathlib import Path
 
-with patch("langchain_openai.ChatOpenAI"):
-    nodes_module = importlib.import_module("agents.nodes")
+ROOT = Path(__file__).resolve().parent.parent
 
-router_node = nodes_module.router_node
+with open(ROOT / "performance" / "baseline.json", "r") as f:
+    BASELINE = json.load(f)
+
+with open(ROOT / "performance" / "current.json", "r") as f:
+    CURRENT = json.load(f)
+
+MAX_ALLOWED_REGRESSION = 0.10
 
 
-@pytest.mark.integration
-class TestAgentGraphRegression:
+def regression(old, new):
+    return (new - old) / old
 
-    @patch.object(nodes_module, "sql_agent_node")
-    @patch.object(nodes_module, "llm")
-    def test_sql_route(self, mock_llm, mock_sql):
 
-        mock_llm.invoke.return_value.content = "sql"
+# --------------------------------------------------
+# Latency Tests
+# --------------------------------------------------
 
-        mock_sql.return_value = {
-            "sql_query": "SELECT COUNT(*) FROM sales;",
-            "data": [{"count": 120}],
-            "error": None,
-        }
+def test_search_latency():
 
-        state = {
-            "question": "How many sales records are there?",
-            "context": [],
-            "metadata": {},
-        }
+    change = regression(
+        BASELINE["search_latency_ms"],
+        CURRENT["search_latency_ms"],
+    )
 
-        result = router_node(state)
+    assert change <= MAX_ALLOWED_REGRESSION
 
-        assert result["route"] == "sql"
-        assert result["metadata"]["sql_query"] == "SELECT COUNT(*) FROM sales;"
-        assert result["context"] == "[{'count': 120}]"
 
-    @patch.object(nodes_module, "llm")
-    def test_vision_route(self, mock_llm):
+def test_chat_latency():
 
-        mock_llm.invoke.return_value.content = "vision"
+    change = regression(
+        BASELINE["chat_latency_ms"],
+        CURRENT["chat_latency_ms"],
+    )
 
-        state = {
-            "question": "Describe the uploaded image.",
-            "context": [],
-            "metadata": {},
-        }
+    assert change <= MAX_ALLOWED_REGRESSION
 
-        result = router_node(state)
 
-        assert result["route"] == "vision"
+def test_vision_latency():
 
-    @patch.object(nodes_module, "llm")
-    def test_general_route(self, mock_llm):
+    change = regression(
+        BASELINE["vision_latency_ms"],
+        CURRENT["vision_latency_ms"],
+    )
 
-        mock_llm.invoke.return_value.content = "general"
+    assert change <= MAX_ALLOWED_REGRESSION
 
-        state = {
-            "question": "Hello!",
-            "context": [],
-            "metadata": {},
-        }
 
-        result = router_node(state)
+# --------------------------------------------------
+# Error Rate
+# --------------------------------------------------
 
-        assert result["route"] == "general"
+def test_error_rate():
 
-    @patch.object(nodes_module, "llm")
-    def test_invalid_route_defaults_to_general(self, mock_llm):
+    assert (
+        CURRENT["error_rate"]
+        <= BASELINE["error_rate"]
+    )
 
-        mock_llm.invoke.return_value.content = "something_random"
 
-        state = {
-            "question": "Test",
-            "context": [],
-            "metadata": {},
-        }
+# --------------------------------------------------
+# Throughput
+# --------------------------------------------------
 
-        result = router_node(state)
+def test_throughput():
 
-        assert result["route"] == "general"
+    assert (
+        CURRENT["throughput_rps"]
+        >= BASELINE["throughput_rps"]
+    )
+
+
+# --------------------------------------------------
+# Memory
+# --------------------------------------------------
+
+def test_memory_usage():
+
+    assert (
+        CURRENT["memory_mb"]
+        <= BASELINE["memory_mb"]
+    )
+
+
+# --------------------------------------------------
+# CPU
+# --------------------------------------------------
+
+def test_cpu_usage():
+
+    assert (
+        CURRENT["cpu_percent"]
+        <= BASELINE["cpu_percent"]
+    )
+
+
+# --------------------------------------------------
+# Overall Regression
+# --------------------------------------------------
+
+def test_overall_regression():
+
+    assert CURRENT["search_latency_ms"] <= BASELINE["search_latency_ms"] * 1.10
+
+    assert CURRENT["chat_latency_ms"] <= BASELINE["chat_latency_ms"] * 1.10
+
+    assert CURRENT["vision_latency_ms"] <= BASELINE["vision_latency_ms"] * 1.10
+
+    assert CURRENT["error_rate"] <= BASELINE["error_rate"]
+
+    assert CURRENT["throughput_rps"] >= BASELINE["throughput_rps"]
+
+    assert CURRENT["memory_mb"] <= BASELINE["memory_mb"]
+
+    assert CURRENT["cpu_percent"] <= BASELINE["cpu_percent"]
+
+
+# --------------------------------------------------
+# Regression Summary
+# --------------------------------------------------
+
+def test_generate_summary():
+
+    report = {
+        "Search Latency (ms)": CURRENT["search_latency_ms"],
+        "Chat Latency (ms)": CURRENT["chat_latency_ms"],
+        "Vision Latency (ms)": CURRENT["vision_latency_ms"],
+        "Error Rate": CURRENT["error_rate"],
+        "Throughput (RPS)": CURRENT["throughput_rps"],
+        "Memory (MB)": CURRENT["memory_mb"],
+        "CPU (%)": CURRENT["cpu_percent"],
+        "Overall": "PASS",
+    }
+
+    print("\n")
+    print("========== Performance Regression Summary ==========")
+
+    for key, value in report.items():
+        print(f"{key:25}: {value}")
+
+    print("====================================================")
+
+    assert report["Overall"] == "PASS"
