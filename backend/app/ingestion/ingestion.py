@@ -12,7 +12,6 @@ PDF
 """
 
 from pathlib import Path
-
 from ..utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
 
 # 🚀 M4 विज़न मॉड्यूल इम्पोर्ट्स
@@ -39,6 +38,8 @@ class IngestionPipeline:
 
         if not pdf_path.exists():
             raise FileNotFoundError(f"{pdf_path} not found.")
+        if pdf_path.stat().st_size == 0:
+            raise ValueError("Uploaded PDF is empty.")
 
         print("=" * 60)
         print("Starting PDF Ingestion Pipeline")
@@ -48,14 +49,18 @@ class IngestionPipeline:
         # 📝 भाग 1: टेक्स्ट इनजेशन फ्लो (Text Ingestion Flow)
         # =========================================================
         print("\n--- Processing Text Content ---")
-        parser = PDFParser(str(pdf_path))
+        try:
+            parser = PDFParser(str(pdf_path))
+        except Exception as e:
+            raise ValueError(f"Unable to open PDF. The file may be corrupted or invalid. ({e})")
+        
         chunks = []
         metadata = []
 
         pagewise_text = None
         try:
             pagewise_text = parser.extract_pagewise_text()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pagewise_text = None
 
         if isinstance(pagewise_text, list) and pagewise_text:
@@ -94,7 +99,7 @@ class IngestionPipeline:
             text = parser.extract_text()
 
             if not text or not text.strip():
-                print("No text found in PDF. Skipping text embedding phase.")
+                    raise ValueError("No readable text found in the uploaded PDF.")
             else:
                 # टेक्स्ट को चंक्स में बदलो
                 chunks = self.chunker.split_text(text)
@@ -133,7 +138,11 @@ class IngestionPipeline:
         print("\n--- Processing Visual Content (Images/Charts) ---")
 
         # 1. PDF से इमेज निकालो और लो-क्वालिटी फ़िल्टर करो (Day 2 & Day 5)
-        extracted_images = self.vision_extractor.extract_images_from_pdf(str(pdf_path))
+        try:
+            extracted_images = self.vision_extractor.extract_images_from_pdf(str(pdf_path))
+        except Exception as e:
+            print(f"Image extraction failed: {e}")
+            extracted_images = []
         print(f"Extracted {len(extracted_images)} high-quality charts/images.")
 
         # 2. अगर इमेजेस मिली हैं, तो CLIP वेक्टर्स बनाकर स्टोर करो (Day 3 & Day 4)

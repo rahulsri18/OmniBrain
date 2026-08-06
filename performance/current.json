@@ -1,0 +1,9 @@
+{
+    "search_latency_ms": 143,
+    "chat_latency_ms": 301,
+    "vision_latency_ms": 860,
+    "error_rate": 0.07,
+    "throughput_rps": 49,
+    "memory_mb": 490,
+    "cpu_percent": 61
+}

@@ -23,6 +23,39 @@ def render_chat():
 
     st.title("💬 OmniBrain AI Assistant")
     st.caption("Ask questions about your uploaded documents.")
+    # Day 17 - End User Guide
+    with st.expander("📖 How to Use OmniBrain", expanded=False):
+
+        st.markdown("""
+### Welcome to OmniBrain
+
+Follow these simple steps:
+
+1. 📄 Upload your documents from **Upload & Dashboard**
+2. 💬 Open **Chat Assistant**
+3. ⌨️ Type your question in the chat box
+4. 🤖 OmniBrain searches your documents
+5. 📚 Review retrieved context and confidence score
+6. 🧠 Expand **Agent Reasoning** to view execution steps
+
+---
+
+### Features
+
+- ✅ Prompt Safety Validation
+- 🔄 Query Rewriting
+- 📚 Retrieved Context
+- 🖼️ Vision Agent Support
+- 🧠 Agent Reasoning
+- ⚡ Streaming Responses
+- 📜 Chat History Pagination
+
+---
+
+### Tip
+
+Use clear, specific questions for the best results.
+""")
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -45,6 +78,8 @@ def render_chat():
 
     # Display paginated messages
     for message in visible_messages:
+
+    
         avatar = "👤" if message["role"] == "user" else "🤖"
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
