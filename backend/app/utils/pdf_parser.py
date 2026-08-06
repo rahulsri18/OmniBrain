@@ -102,14 +102,13 @@ class PDFParser:
         return all_tables
 
     def get_metadata(self):
-        """
-        Return PDF metadata.
-        """
+        try:
+            with pdfplumber.open(self.pdf_path) as pdf:
+                return {
+                    "file_name": self.pdf_path.name,
+                    "total_pages": len(pdf.pages),
+                    "metadata": pdf.metadata,
+                }
 
-        with pdfplumber.open(self.pdf_path) as pdf:
-
-            return {
-                "file_name": self.pdf_path.name,
-                "total_pages": len(pdf.pages),
-                "metadata": pdf.metadata,
-            }
+        except Exception as e:
+            raise ValueError(f"Failed to read metadata: {e}")
