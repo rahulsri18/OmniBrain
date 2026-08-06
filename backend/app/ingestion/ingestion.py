@@ -50,7 +50,11 @@ class IngestionPipeline:
         # 📝 भाग 1: टेक्स्ट इनजेशन फ्लो (Text Ingestion Flow)
         # =========================================================
         print("\n--- Processing Text Content ---")
-        parser = PDFParser(str(pdf_path))
+        try:
+            parser = PDFParser(str(pdf_path))
+        except Exception as e:
+            raise ValueError(f"Unable to open PDF. The file may be corrupted or invalid. ({e})")
+        
         chunks = []
         metadata = []
 
