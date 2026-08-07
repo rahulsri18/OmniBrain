@@ -11,6 +11,8 @@ def apply_chat_styles():
             background-color: rgba(28, 131, 225, 0.05);
             border-radius: 10px;
             padding: 8px;
+            box-shadow: 0 0 8px rgba(28,131,225,0.15);
+            transition: all 0.2s ease-in-out;
         }
         </style>
         """,
@@ -22,6 +24,17 @@ def render_chat():
     apply_chat_styles()
 
     st.title("💬 OmniBrain AI Assistant")
+    # Day 18 - Keyboard Accessibility
+    st.markdown(
+    """
+    <div tabindex="0"
+         role="region"
+         aria-label="OmniBrain Chat Assistant"
+         style="outline:none;">
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
     st.caption("Ask questions about your uploaded documents.")
     # Day 17 - End User Guide
     with st.expander("📖 How to Use OmniBrain", expanded=False):
@@ -102,7 +115,10 @@ Use clear, specific questions for the best results.
                     )
 
     # Chat input
-    prompt = st.chat_input("Ask OmniBrain anything...")
+    prompt = st.chat_input(
+    "Ask OmniBrain anything...",
+    key="chat_input",
+)
 
     if prompt:
         # FIX: Reset pagination back to page 1 on new user input
@@ -176,7 +192,7 @@ Use clear, specific questions for the best results.
                 caption="Image referenced by the Vision Agent",
                 width=500,
             )
-
+            st.caption("🖼️ Accessible image preview for Vision Agent output.")
             reasoning_steps = [
                 ("Question received", "✅"),
                 ("Analyzing user query", "🔍"),
