@@ -11,7 +11,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 GRADER_PROMPT_VERSION = "v1.0"
 DEFAULT_GRADER_MODEL = "claude-sonnet-4-6"
@@ -49,18 +49,20 @@ class DocumentGrader:
     def __init__(
         self,
         llm_client: Any = None,
-        model: Optional[str] = None,
-        call_fn: Optional[Any] = None,
+        model: str | None = None,
+        call_fn: Any | None = None,
         relevance_threshold: float = 0.5,
         max_retries: int = 2,
         retry_backoff_seconds: float = 1.0,
-        request_timeout: Optional[float] = 10.0,
+        request_timeout: float | None = 10.0,
         on_ungraded: str = "not_relevant",
     ):
         if llm_client is None and call_fn is None:
             raise ValueError("Provide either llm_client or call_fn")
         if on_ungraded not in ("not_relevant", "relevant", "raise"):
-            raise ValueError("on_ungraded must be 'not_relevant', 'relevant', or 'raise'")
+            raise ValueError(
+                "on_ungraded must be 'not_relevant', 'relevant', or 'raise'"
+            )
 
         self.llm_client = llm_client
         self.model = model or os.environ.get("GRADER_MODEL", DEFAULT_GRADER_MODEL)
@@ -75,18 +77,18 @@ class DocumentGrader:
         """Call the LLM with retries on transient failures."""
         user_prompt = GRADER_USER_TEMPLATE.format(question=question, chunk=chunk_text)
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
                 if self.call_fn is not None:
                     return self.call_fn(GRADER_SYSTEM_PROMPT, user_prompt)
 
-                kwargs: Dict[str, Any] = dict(
-                    model=self.model,
-                    max_tokens=200,
-                    system=GRADER_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                )
+                kwargs: dict[str, Any] = {
+                    "model": self.model,
+                    "max_tokens": 200,
+                    "system": GRADER_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": user_prompt}],
+                }
                 if self.request_timeout is not None:
                     kwargs["timeout"] = self.request_timeout
 
@@ -95,10 +97,10 @@ class DocumentGrader:
                     if getattr(block, "type", None) == "text":
                         return block.text
                 return ""
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    time.sleep(self.retry_backoff_seconds * (2**attempt))
                     continue
                 raise last_error
 
@@ -110,7 +112,9 @@ class DocumentGrader:
 
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if not match:
-            return GradeResult(relevant=False, score=0.0, reason="unparsable_grader_output")
+            return GradeResult(
+                relevant=False, score=0.0, reason="unparsable_grader_output"
+            )
 
         try:
             data = json.loads(match.group(0))
@@ -122,10 +126,12 @@ class DocumentGrader:
                 reason=str(data.get("reason", "")),
             )
         except (json.JSONDecodeError, TypeError, ValueError):
-            return GradeResult(relevant=False, score=0.0, reason="unparsable_grader_output")
+            return GradeResult(
+                relevant=False, score=0.0, reason="unparsable_grader_output"
+            )
 
     @staticmethod
-    def _extract_chunk_text(doc: Dict[str, Any]) -> str:
+    def _extract_chunk_text(doc: dict[str, Any]) -> str:
         payload = doc.get("payload") or {}
         return (
             payload.get("text")
@@ -134,7 +140,7 @@ class DocumentGrader:
             or doc.get("text", "")
         )
 
-    def grade_one(self, question: str, doc: Dict[str, Any]) -> Dict[str, Any]:
+    def grade_one(self, question: str, doc: dict[str, Any]) -> dict[str, Any]:
         """Grade a single retrieved document dict synchronously."""
         chunk_text = self._extract_chunk_text(doc)
 
@@ -165,18 +171,17 @@ class DocumentGrader:
         }
 
     def grade_batch(
-        self, question: str, docs: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, question: str, docs: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Synchronous batch grading."""
         return [self.grade_one(question, doc) for doc in docs]
 
     async def agrade_batch(
-        self, question: str, docs: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, question: str, docs: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Async batch grading running doc evaluations concurrently."""
         loop = asyncio.get_running_loop()
         tasks = [
-            loop.run_in_executor(None, self.grade_one, question, doc)
-            for doc in docs
+            loop.run_in_executor(None, self.grade_one, question, doc) for doc in docs
         ]
         return await asyncio.gather(*tasks)

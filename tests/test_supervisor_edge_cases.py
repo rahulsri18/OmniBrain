@@ -1,8 +1,13 @@
 from unittest.mock import MagicMock, patch
 
+# Import the actual module so the module-level LLM can be patched
+# without depending on router_node.__globals__.
 with patch("langchain_openai.ChatOpenAI") as MockLLM:
     MockLLM.return_value = MagicMock()
-    from agents.nodes import router_node
+    import agents.nodes as nodes_module
+
+
+router_node = nodes_module.router_node
 
 
 class MockResponse:
@@ -17,13 +22,13 @@ def test_invalid_route_defaults_to_general(mock_retriever, mock_parser):
     mock_retriever.return_value = []
     mock_parser.return_value = []
 
-    router_node.__globals__["llm"].invoke = MagicMock(
+    nodes_module.llm.invoke = MagicMock(
         return_value=MockResponse("unknown_route")
     )
 
     state = {
         "question": "Hello",
-        "context": []
+        "context": [],
     }
 
     result = router_node(state)
@@ -38,13 +43,13 @@ def test_empty_query(mock_retriever, mock_parser):
     mock_retriever.return_value = []
     mock_parser.return_value = []
 
-    router_node.__globals__["llm"].invoke = MagicMock(
+    nodes_module.llm.invoke = MagicMock(
         return_value=MockResponse("general")
     )
 
     state = {
         "question": "",
-        "context": []
+        "context": [],
     }
 
     result = router_node(state)
@@ -59,13 +64,13 @@ def test_whitespace_query(mock_retriever, mock_parser):
     mock_retriever.return_value = []
     mock_parser.return_value = []
 
-    router_node.__globals__["llm"].invoke = MagicMock(
+    nodes_module.llm.invoke = MagicMock(
         return_value=MockResponse("general")
     )
 
     state = {
         "question": "     ",
-        "context": []
+        "context": [],
     }
 
     result = router_node(state)

@@ -36,26 +36,116 @@ transformer = QueryTransformer(
 @trace_node("router")
 def router_node(state: GraphState) -> GraphState:
     """
-    Supervisor node that routes the query using GPT-4o.
+    Supervisor node that routes the query.
+
+    Uses deterministic keyword routing for clear-cut cases and
+    GPT-4o for ambiguous queries.
     """
 
-    messages = [
-        SystemMessage(content=SUPERVISOR_SYSTEM_PROMPT),
-        HumanMessage(content=state["question"])
+    question = state["question"].strip()
+    question_lower = question.lower()
+
+    # ==========================================================
+    # Deterministic routing for clear-cut cases
+    # ==========================================================
+
+    # 1. Vision-related queries
+    vision_keywords = [
+        "image",
+        "picture",
+        "photo",
+        "uploaded image",
+        "uploaded picture",
+        "uploaded photo",
+        "visual",
+        "vision",
+        "describe the image",
+        "describe this image",
     ]
 
-    response = llm.invoke(messages)
+    if any(keyword in question_lower for keyword in vision_keywords):
+        route = "vision"
 
-    route = response.content.strip().lower()
+    # 2. SQL / database-related queries
+    elif any(
+        keyword in question_lower
+        for keyword in [
+            "database",
+            "sql",
+            "sales",
+            "customers",
+            "customer",
+            "employees",
+            "employee",
+            "salary",
+            "salaries",
+            "total",
+            "count",
+            "records",
+            "rows",
+            "table",
+            "region",
+            "active customers",
+        ]
+    ):
+        route = "sql"
 
-    valid_routes = {"retriever", "sql", "vision", "general"}
+    # 3. Document / PDF / page-related queries
+    elif any(
+        keyword in question_lower
+        for keyword in [
+            "pdf",
+            "document",
+            "uploaded document",
+            "uploaded pdf",
+            "page ",
+            "contract",
+            "report",
+            "summarize my uploaded",
+            "summarize the uploaded",
+            "according to the document",
+            "in the document",
+        ]
+    ):
+        route = "retriever"
 
-    if route not in valid_routes:
+    # 4. Greetings / clearly general queries
+    elif any(
+        question_lower.startswith(greeting)
+        for greeting in [
+            "hello",
+            "hi",
+            "hey",
+            "good morning",
+            "good afternoon",
+            "good evening",
+        ]
+    ):
         route = "general"
+
+    # ==========================================================
+    # GPT-4o fallback for ambiguous queries
+    # ==========================================================
+    else:
+        messages = [
+            SystemMessage(content=SUPERVISOR_SYSTEM_PROMPT),
+            HumanMessage(content=question),
+        ]
+
+        response = llm.invoke(messages)
+
+        route = response.content.strip().lower()
+
+        valid_routes = {"retriever", "sql", "vision", "general"}
+
+        if route not in valid_routes:
+            route = "general"
 
     state["route"] = route
 
+    # ==========================================================
     # SQL Route
+    # ==========================================================
     if route == "sql":
         sql_query = sql_agent_node(state["question"])
 
@@ -64,7 +154,9 @@ def router_node(state: GraphState) -> GraphState:
 
         return state
 
+    # ==========================================================
     # Retriever / Vision / General Routes
+    # ==========================================================
     raw_documents = retriever_tool(state["question"])
 
     clean_context_list = parse_retriever_output(raw_documents)

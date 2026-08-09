@@ -1,6 +1,11 @@
 from agents.state import GraphState
 
 
+SAFE_FALLBACK_MESSAGE = (
+    "I'm unable to provide a reliable response for this request."
+)
+
+
 def output_validation_rail_node(state: GraphState) -> GraphState:
     """
     Day 18 - Graceful Output Recovery
@@ -10,54 +15,30 @@ def output_validation_rail_node(state: GraphState) -> GraphState:
     raw errors or empty outputs.
     """
 
-    answer = state.get("answer", "").strip()
+    answer = state.get("answer", "")
+
+    if answer is None:
+        answer = ""
+
+    answer = str(answer).strip()
+
     error = state.get("error")
 
     state.setdefault("metadata", {})
 
-    if error:
+    # Check whether the input was already blocked.
+    blocked = bool(
+        state.get("blocked", False)
+        or state["metadata"].get("blocked", False)
+    )
 
-        error_text = str(error).lower()
-
-        if "blocked" in error_text:
-            message = (
-                "Your request could not be processed because it violates "
-                "the system safety policy."
-            )
-
-        elif "vision" in error_text or "image" in error_text:
-            message = (
-                "The uploaded image or chart could not be processed. "
-                "Please upload a clearer file and try again."
-            )
-
-        elif "sql" in error_text:
-            message = (
-                "The requested database information could not be retrieved."
-            )
-
-        elif "retriever" in error_text:
-            message = (
-                "Relevant information could not be retrieved for this query."
-            )
-
-        else:
-            message = (
-                "An unexpected error occurred while processing your request. "
-                "Please try again."
-            )
-
-        state["answer"] = message
+    # Any blocked input, error, or empty answer gets a safe fallback.
+    if blocked or error or not answer:
+        state["answer"] = SAFE_FALLBACK_MESSAGE
         state["metadata"]["output_blocked"] = True
+        return state
 
-    elif not answer:
-
-        state["answer"] = (
-            "No response could be generated for this request."
-        )
-        state["metadata"]["output_blocked"] = True
-
-    else:
-        state["metadata"]["output_blocked"] = False
+    # Valid answer
+    state["metadata"]["output_blocked"] = False
 
     return state

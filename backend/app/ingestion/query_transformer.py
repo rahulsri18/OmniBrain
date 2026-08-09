@@ -24,8 +24,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # Bump when TRANSFORMER_SYSTEM_PROMPT's wording changes meaningfully, same
 # convention as GRADER_PROMPT_VERSION in document_grader.py.
@@ -68,7 +67,9 @@ Additional Context:
 @dataclass
 class TransformResult:
     rewritten_query: str
-    used_fallback: bool = False  # True if the LLM failed and we fell back to the original query
+    used_fallback: bool = (
+        False  # True if the LLM failed and we fell back to the original query
+    )
 
 
 class QueryTransformer:
@@ -84,41 +85,47 @@ class QueryTransformer:
     def __init__(
         self,
         llm_client: Any = None,
-        model: Optional[str] = None,
-        call_fn: Optional[Any] = None,
+        model: str | None = None,
+        call_fn: Any | None = None,
         max_retries: int = 2,
         retry_backoff_seconds: float = 1.0,
-        request_timeout: Optional[float] = 10.0,
+        request_timeout: float | None = 10.0,
         max_query_length: int = 300,
     ):
         if llm_client is None and call_fn is None:
             raise ValueError("Provide either llm_client or call_fn")
 
         self.llm_client = llm_client
-        self.model = model or os.environ.get("TRANSFORMER_MODEL", DEFAULT_TRANSFORMER_MODEL)
+        self.model = model or os.environ.get(
+            "TRANSFORMER_MODEL", DEFAULT_TRANSFORMER_MODEL
+        )
         self.call_fn = call_fn
         self.max_retries = max_retries
         self.retry_backoff_seconds = retry_backoff_seconds
         self.request_timeout = request_timeout
         self.max_query_length = max_query_length
 
-    def _call_llm(self, query: str, context: Optional[str]) -> str:
+    def _call_llm(self, query: str, context: str | None) -> str:
         """Call the LLM with retries on transient failures. Raises on exhaustion."""
-        context_block = CONTEXT_BLOCK_TEMPLATE.format(context=context) if context else ""
-        user_prompt = TRANSFORMER_USER_TEMPLATE.format(query=query, context_block=context_block)
+        context_block = (
+            CONTEXT_BLOCK_TEMPLATE.format(context=context) if context else ""
+        )
+        user_prompt = TRANSFORMER_USER_TEMPLATE.format(
+            query=query, context_block=context_block
+        )
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
                 if self.call_fn is not None:
                     return self.call_fn(TRANSFORMER_SYSTEM_PROMPT, user_prompt)
 
-                kwargs: Dict[str, Any] = dict(
-                    model=self.model,
-                    max_tokens=100,
-                    system=TRANSFORMER_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                )
+                kwargs: dict[str, Any] = {
+                    "model": self.model,
+                    "max_tokens": 100,
+                    "system": TRANSFORMER_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": user_prompt}],
+                }
                 if self.request_timeout is not None:
                     kwargs["timeout"] = self.request_timeout
 
@@ -127,10 +134,12 @@ class QueryTransformer:
                     if getattr(block, "type", None) == "text":
                         return block.text
                 return ""
-            except Exception as exc:  # noqa: BLE001 - deliberately broad, see retry policy
+            except (
+                Exception # noqa: BLE001
+            ) as exc:
                 last_error = exc
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    time.sleep(self.retry_backoff_seconds * (2**attempt))
                     continue
                 raise last_error
 
@@ -153,7 +162,7 @@ class QueryTransformer:
     def transform(
         self,
         original_query: str,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> TransformResult:
         """
         Rewrite a query for better retrieval.
@@ -170,15 +179,17 @@ class QueryTransformer:
             raw = self._call_llm(original_query, context)
             rewritten = self._clean_output(raw, self.max_query_length)
             if not rewritten:
-                return TransformResult(rewritten_query=original_query, used_fallback=True)
+                return TransformResult(
+                    rewritten_query=original_query, used_fallback=True
+                )
             return TransformResult(rewritten_query=rewritten, used_fallback=False)
-        except Exception:
+        except Exception: # noqa: BLE001
             # Fail safe: if rewriting breaks, search with the original query
             # rather than blocking retrieval entirely.
             return TransformResult(rewritten_query=original_query, used_fallback=True)
 
 
-def enough_relevant(graded_docs: List[Dict[str, Any]], min_relevant: int = 1) -> bool:
+def enough_relevant(graded_docs: list[dict[str, Any]], min_relevant: int = 1) -> bool:
     """
     Decide whether graded retrieval results are sufficient, or a rewrite is needed.
 
@@ -214,12 +225,14 @@ if __name__ == "__main__":
     def flaky_call_fn(system_prompt: str, user_prompt: str) -> str:
         raise ConnectionError("simulated transient API failure")
 
-    flaky_transformer = QueryTransformer(call_fn=flaky_call_fn, max_retries=1, retry_backoff_seconds=0.01)
+    flaky_transformer = QueryTransformer(
+        call_fn=flaky_call_fn, max_retries=1, retry_backoff_seconds=0.01
+    )
     print("\n--- retry exhaustion / fallback to original query ---")
     print(flaky_transformer.transform("What does it say about transformers?"))
 
     # --- enough_relevant helper ---
     print("\n--- enough_relevant checks ---")
     print(enough_relevant([{"relevant": False}, {"relevant": False}]))  # False
-    print(enough_relevant([{"relevant": False}, {"relevant": True}]))   # True
-    print(enough_relevant([], min_relevant=1))                          # False
+    print(enough_relevant([{"relevant": False}, {"relevant": True}]))  # True
+    print(enough_relevant([], min_relevant=1))  # False

@@ -4,7 +4,7 @@ tests/test_vision_safety.py
 
 from agents.safety.vision_sanitizer import sanitize_vision_output
 # pyrefly: ignore [missing-import]
-from agents.prompts.vision_prompts import build_vision_user_prompt
+from backend.app.agents.vision_prompts import build_vision_user_prompt
 
 
 def test_sanitize_vision_output_detects_injection():

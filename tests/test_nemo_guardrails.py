@@ -4,7 +4,7 @@ tests/test_nemo_guardrails.py
 
 import pytest
 # pyrefly: ignore [missing-import]
-from agents.safety.nemo_guardrails import load_omnibrain_guardrails
+from backend.app.agents.safety.nemo_guardrails import load_omnibrain_guardrails
 
 
 @pytest.fixture
