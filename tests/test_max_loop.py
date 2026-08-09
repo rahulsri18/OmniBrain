@@ -1,119 +1,176 @@
 import importlib
 from unittest.mock import patch
 
+
 # ---------------------------------------------------------
-# Prevent OpenAI initialization during import
+# Prevent OpenAI initialization during test collection
 # ---------------------------------------------------------
 
 with patch("langchain_openai.ChatOpenAI"):
     graph_module = importlib.import_module("agents.graph")
 
+
 route_after_supervisor = graph_module.route_after_supervisor
-route_after_vision = graph_module.route_after_vision
 
 
 # ---------------------------------------------------------
-# Supervisor Routing
+# Supervisor Routing Tests
 # ---------------------------------------------------------
 
 def test_sql_route():
-
     state = {
         "route": "sql",
         "error": None,
     }
 
-    assert route_after_supervisor(state) == "sql"
+    result = route_after_supervisor(state)
+
+    assert result == ["sql"]
 
 
 def test_retriever_route():
-
     state = {
         "route": "retriever",
         "error": None,
     }
 
-    assert route_after_supervisor(state) == "retriever"
+    result = route_after_supervisor(state)
+
+    assert result == ["retriever"]
 
 
 def test_vision_route():
-
     state = {
         "route": "vision",
         "error": None,
     }
 
-    assert route_after_supervisor(state) == "vision"
+    result = route_after_supervisor(state)
+
+    assert result == ["vision"]
 
 
-def test_general_route():
-
+def test_general_route_defaults_to_retriever():
     state = {
         "route": "general",
         "error": None,
     }
 
-    assert route_after_supervisor(state) == "general"
+    result = route_after_supervisor(state)
+
+    assert result == ["retriever"]
 
 
-def test_invalid_route_defaults_to_general():
-
+def test_invalid_route_defaults_to_retriever():
     state = {
         "route": "xyz",
         "error": None,
     }
 
-    assert route_after_supervisor(state) == "general"
+    result = route_after_supervisor(state)
+
+    assert result == ["retriever"]
 
 
-def test_missing_route_defaults_to_general():
-
+def test_missing_route_defaults_to_retriever():
     state = {
         "error": None,
     }
 
-    assert route_after_supervisor(state) == "general"
+    result = route_after_supervisor(state)
 
+    assert result == ["retriever"]
+
+
+# ---------------------------------------------------------
+# Error Routing Tests
+# ---------------------------------------------------------
 
 def test_error_goes_to_fallback():
-
     state = {
         "route": "sql",
         "error": "Database Error",
     }
 
-    assert route_after_supervisor(state) == "fallback"
+    result = route_after_supervisor(state)
+
+    assert result == ["fallback"]
+
+
+def test_error_has_priority_over_route():
+    state = {
+        "route": "vision",
+        "error": "Vision processing failed",
+    }
+
+    result = route_after_supervisor(state)
+
+    assert result == ["fallback"]
 
 
 # ---------------------------------------------------------
-# Vision Routing
+# Hybrid Routing
 # ---------------------------------------------------------
 
-def test_vision_success():
-
+def test_hybrid_route():
     state = {
-        "image_error": False,
+        "route": "hybrid",
         "error": None,
     }
 
-    assert route_after_vision(state) == "end"
+    result = route_after_supervisor(state)
+
+    assert result == ["sql", "retriever"]
 
 
-def test_vision_image_error():
+# ---------------------------------------------------------
+# Route Result Type
+# ---------------------------------------------------------
 
-    state = {
-        "image_error": True,
-        "error": None,
+def test_route_result_is_list():
+    states = [
+        {
+            "route": "sql",
+            "error": None,
+        },
+        {
+            "route": "retriever",
+            "error": None,
+        },
+        {
+            "route": "vision",
+            "error": None,
+        },
+        {
+            "route": "general",
+            "error": None,
+        },
+    ]
+
+    for state in states:
+        result = route_after_supervisor(state)
+
+        assert isinstance(result, list)
+        assert len(result) >= 1
+
+
+# ---------------------------------------------------------
+# Valid Route Coverage
+# ---------------------------------------------------------
+
+def test_all_supported_routes():
+    expected_routes = {
+        "sql": ["sql"],
+        "retriever": ["retriever"],
+        "vision": ["vision"],
+        "hybrid": ["sql", "retriever"],
+        "general": ["retriever"],
     }
 
-    assert route_after_vision(state) == "fallback"
+    for route, expected in expected_routes.items():
+        state = {
+            "route": route,
+            "error": None,
+        }
 
-
-def test_vision_runtime_error():
-
-    state = {
-        "image_error": False,
-        "error": "OCR Failed",
-    }
-
-    assert route_after_vision(state) == "fallback"
+        assert route_after_supervisor(state) == expected
