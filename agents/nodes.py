@@ -1,8 +1,10 @@
+from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.app.sql_agent.agent import sql_agent_node
 from backend.app.ingestion.query_transformer import QueryTransformer
 from agents.langfuse_tracing import trace_node
+
 
 from agents.state import GraphState
 from agents.retriever import retriever_tool
@@ -172,5 +174,35 @@ def merge_node(state: GraphState) -> GraphState:
 
     state["merged_context"] = merged_context
     state["context"] = merged_context
+
+    return state
+async def fallback_node(state: GraphState) -> GraphState:
+    """
+    Handles graceful recovery when upstream nodes fail
+    or route to an error state.
+    """
+
+    error_detail = state.get(
+        "error",
+        "An unexpected runtime error occurred."
+    )
+
+    fallback_message = (
+        "I encountered a temporary glitch while processing your request. "
+        "Please try rephrasing your prompt or uploading the document again."
+    )
+
+    state.setdefault("metadata", {})
+
+    state["error"] = error_detail
+    state["metadata"]["execution_status"] = "failed_gracefully"
+
+    state.setdefault("chat_history", [])
+    state["chat_history"].append({
+        "role": "assistant",
+        "content": fallback_message,
+    })
+
+    state["response"] = fallback_message
 
     return state

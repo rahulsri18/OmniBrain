@@ -158,7 +158,7 @@ Vision Sub-Agent execution logic supporting primary vision analysis and Day 12 b
 
 from typing import Any, Dict, Optional
 # pyrefly: ignore [missing-import]
-from agents.prompts.vision_prompts import (
+from agents.prompts import (
     PRIMARY_VISION_SYSTEM_PROMPT,
     BACKUP_VISION_SYSTEM_PROMPT,
     BACKUP_VISION_USER_TEMPLATE,
