@@ -6,7 +6,12 @@ M4 Day 16: Vision Model Quantization & Batch Inference Engine
 from typing import List, Dict, Any, Union
 import torch
 from PIL import Image
-from transformers import AutoProcessor, AutoModelForVision2Seq, BitsAndBytesConfig
+from transformers import AutoProcessor, BitsAndBytesConfig
+
+try:
+    from transformers import AutoModelForVision2Seq
+except ImportError:
+    from transformers import Blip2ForConditionalGeneration as AutoModelForVision2Seq
 
 
 class OptimizedVisionInferenceEngine:

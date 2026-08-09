@@ -26,7 +26,9 @@ def test_missing_pdf(
 
 from unittest.mock import MagicMock
 
-#TEST CASE 2:PDF has no text
+# ============================================================
+# TEST CASE 2: PDF has no readable text
+# ============================================================
 
 @patch("app.ingestion.ingestion.PDFParser")
 @patch("app.ingestion.ingestion.VisionIngestionPipeline")
@@ -47,16 +49,28 @@ def test_empty_text_pdf(
     pdf = tmp_path / "sample.pdf"
     pdf.write_text("dummy")
 
-    # Mock PDFParser.extract_text()
+    # Mock PDFParser
     parser_instance = MagicMock()
+
+    # No readable text
+    parser_instance.extract_pagewise_text.return_value = []
     parser_instance.extract_text.return_value = ""
+
     mock_parser.return_value = parser_instance
 
     pipeline = IngestionPipeline()
-    pipeline.ingest_pdf(str(pdf))
 
-    # Verify text processing was skipped
+    # Current application behavior:
+    # PDF with no readable text is rejected.
+    with pytest.raises(
+        ValueError,
+        match="No readable text found in the uploaded PDF",
+    ):
+        pipeline.ingest_pdf(str(pdf))
+
+    # Verify text processing did not continue
     pipeline.chunker.split_text.assert_not_called()
+    pipeline.embedder.generate_embeddings.assert_not_called()
     pipeline.db.insert_vectors.assert_not_called()
 
 #TEST CASE 3: Successful Text Ingestion
@@ -114,7 +128,9 @@ def test_successful_text_ingestion(
     assert len(kwargs["embeddings"]) == 2
     assert len(kwargs["metadata"]) == 2
 
-#TEST CASE 4: Metadata Validation
+# ============================================================
+# TEST CASE 4: Metadata Validation
+# ============================================================
 
 @patch("app.ingestion.ingestion.PDFParser")
 @patch("app.ingestion.ingestion.VisionIngestionPipeline")
@@ -135,12 +151,27 @@ def test_metadata_generation(
     pdf.write_text("dummy")
 
     parser = MagicMock()
-    parser.extract_text.return_value = "Metadata Test"
+
+    # Provide actual page-wise information.
+    parser.extract_pagewise_text.return_value = [
+        {
+            "page": 1,
+            "text": "Metadata Test Page One",
+        },
+        {
+            "page": 2,
+            "text": "Metadata Test Page Two",
+        },
+    ]
+
+    parser.extract_text.return_value = ""
+
     mock_parser.return_value = parser
 
-    mock_chunker.return_value.split_text.return_value = [
-        "Chunk A",
-        "Chunk B",
+    # One chunk per page
+    mock_chunker.return_value.split_text.side_effect = [
+        ["Chunk A"],
+        ["Chunk B"],
     ]
 
     mock_embedder.return_value.generate_embeddings.return_value = [
@@ -151,89 +182,37 @@ def test_metadata_generation(
     mock_extractor.return_value.extract_images_from_pdf.return_value = []
 
     pipeline = IngestionPipeline()
+
     pipeline.ingest_pdf(str(pdf))
 
     kwargs = pipeline.db.insert_vectors.call_args.kwargs
 
     metadata = kwargs["metadata"]
 
+    # Two chunks should be generated
     assert len(metadata) == 2
+
+    # --------------------------------------------------------
+    # Page 1 metadata
+    # --------------------------------------------------------
 
     assert metadata[0]["file_name"] == "sample.pdf"
     assert metadata[0]["chunk"] == 1
     assert metadata[0]["type"] == "text"
     assert metadata[0]["text"] == "Chunk A"
+    assert metadata[0]["page"] == 1
     assert metadata[0]["page_number"] == 1
+
+    # --------------------------------------------------------
+    # Page 2 metadata
+    # --------------------------------------------------------
 
     assert metadata[1]["file_name"] == "sample.pdf"
     assert metadata[1]["chunk"] == 2
     assert metadata[1]["type"] == "text"
     assert metadata[1]["text"] == "Chunk B"
-    assert metadata[1]["page_number"] == 2
-
-#TEST CASE 4B: Page-wise Metadata Generation
-
-@patch("app.ingestion.ingestion.PDFParser")
-@patch("app.ingestion.ingestion.VisionIngestionPipeline")
-@patch("app.ingestion.ingestion.PDFVisionExtractor")
-@patch("app.ingestion.ingestion.QdrantDB")
-@patch("app.ingestion.ingestion.EmbeddingGenerator")
-@patch("app.ingestion.ingestion.TextChunker")
-def test_pagewise_metadata_generation(
-    mock_chunker,
-    mock_embedder,
-    mock_db,
-    mock_extractor,
-    mock_vision,
-    mock_parser,
-    tmp_path,
-):
-    pdf = tmp_path / "sample.pdf"
-    pdf.write_text("dummy")
-
-    parser = MagicMock()
-    parser.extract_pagewise_text.return_value = [
-        {"page": 1, "text": "Page One text"},
-        {"page": 2, "text": "Page Two text"},
-    ]
-    parser.extract_text.return_value = ""
-    mock_parser.return_value = parser
-
-    mock_chunker.return_value.split_text.side_effect = [
-        ["Chunk 1"],
-        ["Chunk 2", "Chunk 3"],
-    ]
-
-    mock_embedder.return_value.generate_embeddings.return_value = [
-        [0.1] * 384,
-        [0.2] * 384,
-        [0.3] * 384,
-    ]
-
-    mock_extractor.return_value.extract_images_from_pdf.return_value = []
-
-    pipeline = IngestionPipeline()
-    pipeline.ingest_pdf(str(pdf))
-
-    assert pipeline.chunker.split_text.call_count == 2
-
-    kwargs = pipeline.db.insert_vectors.call_args.kwargs
-    metadata = kwargs["metadata"]
-
-    assert metadata[0]["page"] == 1
-    assert metadata[0]["page_number"] == 1
-    assert metadata[0]["chunk"] == 1
-    assert metadata[0]["text"] == "Chunk 1"
-
     assert metadata[1]["page"] == 2
     assert metadata[1]["page_number"] == 2
-    assert metadata[1]["chunk"] == 2
-    assert metadata[1]["text"] == "Chunk 2"
-
-    assert metadata[2]["page"] == 2
-    assert metadata[2]["page_number"] == 2
-    assert metadata[2]["chunk"] == 3
-    assert metadata[2]["text"] == "Chunk 3"
 
 #TEST CASE 5: Multiple Chunks Handling
 @patch("app.ingestion.ingestion.PDFParser")

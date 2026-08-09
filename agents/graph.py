@@ -16,7 +16,25 @@ from agents.nodes import (
 from agents.guardrail import input_safety_rail_node
 from agents.vision_node import vision_node
 # pyrefly: ignore [missing-import]
-from agents.nodes.fallback import fallback_node
+
+import importlib.util
+from pathlib import Path
+
+
+_fallback_path = Path(__file__).parent / "nodes" / "fallback.py"
+_fallback_spec = importlib.util.spec_from_file_location(
+    "agents_fallback_node",
+    _fallback_path,
+)
+
+if _fallback_spec is None or _fallback_spec.loader is None:
+    raise ImportError(f"Unable to load fallback node from {_fallback_path}")
+
+_fallback_module = importlib.util.module_from_spec(_fallback_spec)
+_fallback_spec.loader.exec_module(_fallback_module)
+
+fallback_node = _fallback_module.fallback_node
+
 from agents.output_guardrail import output_validation_rail_node
 
 

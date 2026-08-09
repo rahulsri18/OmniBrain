@@ -1,10 +1,14 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-# Prevent ChatOpenAI from initializing during import
+# Import the actual nodes module so that the module-level LLM
+# can be patched without depending on router_node.__globals__.
 with patch("langchain_openai.ChatOpenAI") as MockLLM:
     MockLLM.return_value = MagicMock()
-    from agents.nodes import router_node
+    import agents.nodes as nodes_module
+
+
+router_node = nodes_module.router_node
 
 
 class MockResponse:
@@ -50,11 +54,10 @@ def test_supervisor_routing(
     query,
     expected_route,
 ):
-
     mock_retriever.return_value = []
     mock_parser.return_value = []
 
-    router_node.__globals__["llm"].invoke = MagicMock(
+    nodes_module.llm.invoke = MagicMock(
         return_value=MockResponse(expected_route)
     )
 

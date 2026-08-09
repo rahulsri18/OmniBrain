@@ -1,22 +1,54 @@
-"""
-tests/test_rate_limiter.py
-"""
+import os
 
-import pytest
+# Must be set BEFORE importing the application because
+# ChatOpenAI is initialized during module import.
+os.environ.setdefault("OPENAI_API_KEY", "test-key-for-rate-limit")
+
 from fastapi.testclient import TestClient
+
 from backend.app.main import app
+from backend.app.config import settings
+
 
 client = TestClient(app)
 
 
 def test_upload_rate_limit():
-    """Verify that file upload endpoint enforces 10 requests/minute limit."""
-    # Dummy file
-    files = {"file": ("test.pdf", b"%PDF-1.4 dummy content", "application/pdf")}
+    """
+    Verify that /api/v1/upload enforces the 10 requests/minute limit.
+    """
 
-    # Send requests up to limit
-    responses = [client.post("/api/v1/upload", files=files) for _ in range(12)]
+    # The upload endpoint is protected by API-key authentication.
+    headers = {
+        settings.API_KEY_NAME: settings.API_KEY
+    }
 
-    # The 11th and 12th requests should be blocked with 429
-    status_codes = [r.status_code for r in responses]
-    assert 429 in status_codes
+    responses = []
+
+    for _ in range(12):
+        files = {
+            "file": (
+                "test.pdf",
+                b"%PDF-1.4 dummy content",
+                "application/pdf",
+            )
+        }
+
+        response = client.post(
+            "/api/v1/upload",
+            files=files,
+            headers=headers,
+        )
+
+        responses.append(response)
+
+    status_codes = [response.status_code for response in responses]
+
+    print(f"\nUpload status codes: {status_codes}")
+
+    # 10 requests/minute are allowed.
+    # Requests after the limit must receive 429.
+    assert 429 in status_codes, (
+        f"Expected HTTP 429 after exceeding the upload rate limit. "
+        f"Received: {status_codes}"
+    )

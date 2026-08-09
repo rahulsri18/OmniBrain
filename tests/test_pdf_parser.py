@@ -4,18 +4,24 @@ from unittest.mock import MagicMock, patch
 from backend.app.utils.pdf_parser import PDFParser
 
 
-# ---------- Constructor ----------
+# ============================================================
+# Constructor
+# ============================================================
 
 def test_pdf_not_found():
     with pytest.raises(FileNotFoundError):
         PDFParser("missing.pdf")
 
 
-# ---------- extract_text ----------
+# ============================================================
+# extract_text
+# ============================================================
 
 @patch("backend.app.utils.pdf_parser.pdfplumber.open")
-@patch("backend.app.utils.pdf_parser.Path.exists", return_value=True)
-def test_extract_text(mock_exists, mock_open):
+def test_extract_text(mock_open, tmp_path):
+
+    pdf_file = tmp_path / "sample.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 dummy")
 
     page1 = MagicMock()
     page1.extract_text.return_value = "Hello"
@@ -28,16 +34,22 @@ def test_extract_text(mock_exists, mock_open):
 
     mock_open.return_value.__enter__.return_value = pdf
 
-    parser = PDFParser("sample.pdf")
+    parser = PDFParser(str(pdf_file))
 
     text = parser.extract_text()
 
     assert text == "Hello\nWorld"
 
 
+# ============================================================
+# extract_empty_text
+# ============================================================
+
 @patch("backend.app.utils.pdf_parser.pdfplumber.open")
-@patch("backend.app.utils.pdf_parser.Path.exists", return_value=True)
-def test_extract_empty_text(mock_exists, mock_open):
+def test_extract_empty_text(mock_open, tmp_path):
+
+    pdf_file = tmp_path / "sample.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 dummy")
 
     page = MagicMock()
     page.extract_text.return_value = None
@@ -47,16 +59,20 @@ def test_extract_empty_text(mock_exists, mock_open):
 
     mock_open.return_value.__enter__.return_value = pdf
 
-    parser = PDFParser("sample.pdf")
+    parser = PDFParser(str(pdf_file))
 
     assert parser.extract_text() == ""
 
 
-# ---------- extract_pagewise_text ----------
+# ============================================================
+# extract_pagewise_text
+# ============================================================
 
 @patch("backend.app.utils.pdf_parser.pdfplumber.open")
-@patch("backend.app.utils.pdf_parser.Path.exists", return_value=True)
-def test_extract_pagewise_text(mock_exists, mock_open):
+def test_extract_pagewise_text(mock_open, tmp_path):
+
+    pdf_file = tmp_path / "sample.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 dummy")
 
     p1 = MagicMock()
     p1.extract_text.return_value = "Page One"
@@ -69,22 +85,28 @@ def test_extract_pagewise_text(mock_exists, mock_open):
 
     mock_open.return_value.__enter__.return_value = pdf
 
-    parser = PDFParser("sample.pdf")
+    parser = PDFParser(str(pdf_file))
 
     pages = parser.extract_pagewise_text()
 
     assert len(pages) == 2
+
     assert pages[0]["page"] == 1
-    assert pages[1]["page"] == 2
     assert pages[0]["text"] == "Page One"
+
+    assert pages[1]["page"] == 2
     assert pages[1]["text"] == "Page Two"
 
 
-# ---------- extract_tables ----------
+# ============================================================
+# extract_tables
+# ============================================================
 
 @patch("backend.app.utils.pdf_parser.pdfplumber.open")
-@patch("backend.app.utils.pdf_parser.Path.exists", return_value=True)
-def test_extract_tables(mock_exists, mock_open):
+def test_extract_tables(mock_open, tmp_path):
+
+    pdf_file = tmp_path / "sample.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 dummy")
 
     page = MagicMock()
     page.extract_tables.return_value = [["A", "B"]]
@@ -94,7 +116,7 @@ def test_extract_tables(mock_exists, mock_open):
 
     mock_open.return_value.__enter__.return_value = pdf
 
-    parser = PDFParser("sample.pdf")
+    parser = PDFParser(str(pdf_file))
 
     tables = parser.extract_tables()
 
@@ -103,11 +125,15 @@ def test_extract_tables(mock_exists, mock_open):
     assert tables[0]["tables"] == [["A", "B"]]
 
 
-# ---------- metadata ----------
+# ============================================================
+# Metadata
+# ============================================================
 
 @patch("backend.app.utils.pdf_parser.pdfplumber.open")
-@patch("backend.app.utils.pdf_parser.Path.exists", return_value=True)
-def test_get_metadata(mock_exists, mock_open):
+def test_get_metadata(mock_open, tmp_path):
+
+    pdf_file = tmp_path / "sample.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 dummy")
 
     pdf = MagicMock()
     pdf.pages = [1, 2, 3]
@@ -115,7 +141,7 @@ def test_get_metadata(mock_exists, mock_open):
 
     mock_open.return_value.__enter__.return_value = pdf
 
-    parser = PDFParser("sample.pdf")
+    parser = PDFParser(str(pdf_file))
 
     metadata = parser.get_metadata()
 
