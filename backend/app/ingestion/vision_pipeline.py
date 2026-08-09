@@ -144,10 +144,18 @@ class VisionIngestionPipeline:
             inputs = self.processor(images=image, return_tensors="pt").to(self.device)
 
             with torch.no_grad():
-                image_features = self.model.get_image_features(**inputs)
+                 features = self.model.get_image_features(**inputs)
+                 # Extract tensor depending on HuggingFace Transformers version
+                 if hasattr(features, "pooler_output"):
+                     image_embeds = features.pooler_output
+                 elif hasattr(features, "image_embeds"):
+                     image_embeds = features.image_embeds
+                 else:
+                     image_embeds = features
 
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            embedding = image_features.cpu().numpy()[0].tolist()
+            # Normalize the raw tensor
+            image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
+            embedding = image_embeds.cpu().numpy()[0].tolist()
             return embedding
         except Exception as e:  # noqa: BLE001
             logger.error(f"Error generating CLIP embedding for {image_path}: {e!s}")
