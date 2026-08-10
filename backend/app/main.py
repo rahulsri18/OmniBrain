@@ -14,13 +14,15 @@ from .sql_agent.schema import ChatRequest
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from fastapi import Depends
-
+from urllib.request import urlopen
 
 # Import compiled graph safely
 try:
     from agents.graph import app_graph
-except ImportError:
-    app_graph = None
+    print("✅ LangGraph imported successfully:", app_graph)
+except Exception as e:
+    print("❌ LangGraph import failed:", repr(e))
+    raise
 
 app = FastAPI(title="OmniBrain Backend", version="0.1.0")
 
@@ -80,13 +82,16 @@ async def timeout_middleware(request, call_next):
 
 
 @app.get(
-    "/",
-    summary="Health Check",
-    description="Checks whether the OmniBrain backend server is running.",
-    response_description="Server status message"
+    "/api/v1/health",
+    summary="Backend Health Check",
+    description="Checks whether the OmniBrain backend is healthy."
 )
-def home():
-    return {"message": "Server is running"}
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "omnibrain-backend"
+    }
+
 
 @app.post(
     "/api/v1/upload",

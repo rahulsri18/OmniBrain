@@ -89,3 +89,6 @@ zstandard
 pymupdf>=1.24.0
 aiohttp
 fastapi
+slowapi
+pydantic-settings
+opencv-python-headless
