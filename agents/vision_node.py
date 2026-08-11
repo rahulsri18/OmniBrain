@@ -64,12 +64,13 @@ def detect_blur(image_path: str, threshold: float = 80.0) -> bool:
 class VisionSubAgent:
     """Wraps the GPT-4o multimodal call for chart/graph analysis."""
 
-    def __init__(self, model_name: str = "gpt-4o"):
-        self.llm = ChatOpenAI(
-            model=model_name,
-            api_key=settings.OPENAI_API_KEY,
-            temperature=0.0,  # strict, to avoid hallucinated numbers
-        )
+    def __init__(self, model_name: str = None):
+     self.llm = ChatOpenAI(
+        model=model_name or settings.GEMINI_MODEL,
+        api_key=settings.GEMINI_API_KEY,
+        base_url=settings.GEMINI_BASE_URL,
+        temperature=0.0,
+    )
 
     def analyze_chart_or_graph(self, user_query: str, image_path: str) -> str:
         base64_image = encode_image_to_base64(image_path)
