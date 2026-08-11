@@ -111,9 +111,7 @@ builder.add_node("output_rail", output_validation_rail_node)
 builder.add_node("sql", sql_node)
 builder.add_node("retriever", retriever_node)
 builder.add_node("merge", merge_node)
-builder.add_node("vision", vision_node)
-builder.add_node("fallback", fallback_node)
-builder.add_node("output_rail", output_validation_rail_node)
+
 
 # 2. Wire Entry Point & Supervisor
 builder.set_entry_point("input_rail")
