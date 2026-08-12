@@ -11,7 +11,12 @@ from app.sql_agent.db import ReadOnlySQLDatabase
 from app.sql_agent.prompts import SQL_SYSTEM_PROMPT
 from app.config import settings
 
-llm = ChatOpenAI(model=settings.SQL_AGENT_MODEL, temperature=settings.TEMPERATURE)
+llm = ChatOpenAI(
+    model=settings.GEMINI_MODEL,
+    api_key=settings.GEMINI_API_KEY,
+    base_url=settings.GEMINI_BASE_URL,
+    temperature=settings.TEMPERATURE,
+)
 
 db_client = ReadOnlySQLDatabase(db_path=settings.SQLITE_DB_PATH)
 

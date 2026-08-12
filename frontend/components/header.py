@@ -10,6 +10,13 @@ def render_header():
         st.caption("Agentic Multi-Modal RAG Orchestrator")
 
     with right:
-        st.success("🟢 System Online")
+        st.markdown(
+            """
+            <div class="ob-status ob-glass" style="margin-top: 1.1rem;">
+                <span class="ob-status-dot"></span> System Online
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown("<br>", unsafe_allow_html=True)
