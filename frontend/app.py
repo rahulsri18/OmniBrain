@@ -15,7 +15,9 @@ def load_css():
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # --- Custom theme temporarily OFF (functionality first, styling later) ---
-# load_css()
+load_css()
+
+
 
 # Sidebar और Components इम्पोर्ट करें
 from components.sidebar import render_sidebar
