@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from backend.app.sql_agent.agent import sql_agent_node
 from backend.app.ingestion.query_transformer import QueryTransformer
 from agents.langfuse_tracing import trace_node
+from backend.app.config import settings
 
 
 from agents.state import GraphState
@@ -13,7 +14,9 @@ from agents.prompts import SUPERVISOR_SYSTEM_PROMPT
 
 
 llm = ChatOpenAI(
-    model="gpt-4o",
+    model=settings.GEMINI_MODEL,
+    api_key=settings.GEMINI_API_KEY,
+    base_url=settings.GEMINI_BASE_URL,
     temperature=0
 )
 
