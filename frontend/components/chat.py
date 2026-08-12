@@ -1,130 +1,344 @@
 import time
 import streamlit as st
+import textwrap
 
 
-def apply_chat_styles():
-    """Custom CSS for distinct chat bubbles."""
+def scroll_chat_to_top():
     st.markdown(
         """
-        <style>
-        div[data-testid="stChatMessage"]:has(div[aria-label="chat message avatar 🤖"]) {
-            background-color: rgba(28, 131, 225, 0.05);
-            border-radius: 10px;
-            padding: 8px;
-            box-shadow: 0 0 8px rgba(28,131,225,0.15);
-            transition: all 0.2s ease-in-out;
-        }
-        </style>
+        <script>
+        window.parent.scrollTo({
+            top: 0,
+            behavior: "instant"
+        });
+        </script>
         """,
         unsafe_allow_html=True,
     )
 
 
+def _html(content):
+    """Render custom HTML safely."""
+    st.html(textwrap.dedent(content))
+
+
 def render_chat():
-    apply_chat_styles()
 
-    st.title("💬 OmniBrain AI Assistant")
-    # Day 18 - Keyboard Accessibility
-    st.markdown(
-    """
-    <div tabindex="0"
-         role="region"
-         aria-label="OmniBrain Chat Assistant"
-         style="outline:none;">
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-    st.caption("Ask questions about your uploaded documents.")
-    # Day 17 - End User Guide
-    with st.expander("📖 How to Use OmniBrain", expanded=False):
-
-        st.markdown("""
-### Welcome to OmniBrain
-
-Follow these simple steps:
-
-1. 📄 Upload your documents from **Upload & Dashboard**
-2. 💬 Open **Chat Assistant**
-3. ⌨️ Type your question in the chat box
-4. 🤖 OmniBrain searches your documents
-5. 📚 Review retrieved context and confidence score
-6. 🧠 Expand **Agent Reasoning** to view execution steps
-
----
-
-### Features
-
-- ✅ Prompt Safety Validation
-- 🔄 Query Rewriting
-- 📚 Retrieved Context
-- 🖼️ Vision Agent Support
-- 🧠 Agent Reasoning
-- ⚡ Streaming Responses
-- 📜 Chat History Pagination
-
----
-
-### Tip
-
-Use clear, specific questions for the best results.
-""")
+    # =========================================================
+    # INITIAL STATE
+    # =========================================================
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Day 16 - Chat History Pagination
-    PAGE_SIZE = 5
-
     if "chat_page" not in st.session_state:
         st.session_state.chat_page = 1
 
-    total_messages = len(st.session_state.messages)
-    start_index = max(0, total_messages - (PAGE_SIZE * st.session_state.chat_page))
-    visible_messages = st.session_state.messages[start_index:]
+    PAGE_SIZE = 5
 
-    # Show pagination control if total messages exceed page threshold
+    # =========================================================
+    # CHAT HEADER
+    # =========================================================
+
+    _html(
+        """
+        <div class="ob-chat-header">
+
+            <div class="ob-chat-header-left">
+
+                <div class="ob-chat-avatar">
+                    🧠
+                </div>
+
+                <div>
+
+                    <div class="ob-eyebrow">
+                        <span class="dot"></span>
+                        AI ASSISTANT
+                    </div>
+
+                    <h1 class="ob-chat-title">
+                        OmniBrain <span>Chat</span>
+                    </h1>
+
+                    <p class="ob-chat-subtitle">
+                        Ask questions about your uploaded documents
+                        and get grounded, contextual answers.
+                    </p>
+
+                </div>
+
+            </div>
+
+            <div class="ob-chat-online">
+                <span class="ob-status-dot"></span>
+                Online
+            </div>
+
+        </div>
+        """
+    )
+
+    # =========================================================
+    # EMPTY CHAT / WELCOME
+    # =========================================================
+
+    if not st.session_state.messages:
+
+        _html(
+            """
+            <div class="ob-chat-welcome">
+
+                <div class="ob-chat-welcome-icon">
+                    ✨
+                </div>
+
+                <h2>
+                    Ask OmniBrain anything
+                </h2>
+
+                <p>
+                    Your documents are the knowledge source.
+                    Ask specific questions and OmniBrain will retrieve
+                    relevant context before generating an answer.
+                </p>
+
+            </div>
+            """
+        )
+
+        _html(
+            """
+            <div class="ob-suggestion-label">
+                TRY ASKING
+            </div>
+            """
+        )
+
+        suggestion_col1, suggestion_col2, suggestion_col3 = st.columns(3)
+
+        with suggestion_col1:
+
+            suggestion_1 = st.button(
+                "📄 Summarize my document",
+                use_container_width=True,
+                key="suggestion_summary",
+            )
+
+        with suggestion_col2:
+
+            suggestion_2 = st.button(
+                "🔍 Find the key points",
+                use_container_width=True,
+                key="suggestion_keypoints",
+            )
+
+        with suggestion_col3:
+
+            suggestion_3 = st.button(
+                "📊 Analyze the data",
+                use_container_width=True,
+                key="suggestion_data",
+            )
+
+        if suggestion_1:
+
+            st.session_state.pending_prompt = (
+                "Summarize my uploaded document."
+            )
+
+        elif suggestion_2:
+
+            st.session_state.pending_prompt = (
+                "What are the key points in my uploaded document?"
+            )
+
+        elif suggestion_3:
+
+            st.session_state.pending_prompt = (
+                "Analyze the important data from my uploaded document."
+            )
+
+    # =========================================================
+    # CHAT HISTORY PAGINATION
+    # =========================================================
+
+    total_messages = len(
+        st.session_state.messages
+    )
+
+    start_index = max(
+        0,
+        total_messages - (
+            PAGE_SIZE * st.session_state.chat_page
+        ),
+    )
+
+    visible_messages = (
+        st.session_state.messages[start_index:]
+    )
+
     if start_index > 0:
-        if st.button("⬆️ Load Older Messages", key="load_older"):
+
+        if st.button(
+            "⬆️ Load Older Messages",
+            key="load_older",
+        ):
+
             st.session_state.chat_page += 1
             st.rerun()
 
-    # Display paginated messages
+    # =========================================================
+    # DISPLAY EXISTING MESSAGES
+    # =========================================================
+
     for message in visible_messages:
 
-    
-        avatar = "👤" if message["role"] == "user" else "🤖"
-        with st.chat_message(message["role"], avatar=avatar):
-            st.markdown(message["content"])
+        role = message["role"]
 
-            if message["role"] == "assistant" and "image" in message:
-                st.image(
-                    message["image"],
-                    caption="Image referenced by the Vision Agent",
-                    width=500,
+        if role == "user":
+
+            with st.chat_message(
+                "user",
+                avatar="👤",
+            ):
+
+                st.markdown(
+                    message["content"]
                 )
 
-            if message["role"] == "assistant" and "reasoning" in message:
-                with st.expander("🧠 Agent Reasoning", expanded=False):
-                    for step, icon in message["reasoning"]:
-                        st.markdown(f"{icon} {step}")
-                    st.divider()
-                    st.caption(
-                        "This reasoning panel currently displays placeholder execution steps. "
-                        "Live LangGraph reasoning will be integrated in future milestones."
+        else:
+
+            with st.chat_message(
+                "assistant",
+                avatar="🤖",
+            ):
+
+                st.markdown(
+                    message["content"]
+                )
+
+                # ---------------------------------------------
+                # Retrieved Context
+                # ---------------------------------------------
+
+                if "context" in message:
+
+                    _html(
+                        """
+                        <div class="ob-chat-section-label">
+                            📚 RETRIEVED CONTEXT
+                        </div>
+                        """
                     )
 
-    # Chat input
+                    context_col1, context_col2 = st.columns(2)
+
+                    with context_col1:
+
+                        st.metric(
+                            label="Documents Retrieved",
+                            value=message.get(
+                                "documents",
+                                "4",
+                            ),
+                        )
+
+                    with context_col2:
+
+                        st.metric(
+                            label="Confidence",
+                            value=message.get(
+                                "confidence",
+                                "92%",
+                            ),
+                        )
+
+                    st.caption(
+                        message.get(
+                            "context",
+                            "Source information unavailable.",
+                        )
+                    )
+
+                # ---------------------------------------------
+                # Vision Output
+                # ---------------------------------------------
+
+                if "image" in message:
+
+                    _html(
+                        """
+                        <div class="ob-chat-section-label">
+                            🖼️ VISION AGENT OUTPUT
+                        </div>
+                        """
+                    )
+
+                    st.image(
+                        message["image"],
+                        caption=(
+                            "Image referenced by "
+                            "the Vision Agent"
+                        ),
+                        width=500,
+                    )
+
+                # ---------------------------------------------
+                # Agent Reasoning
+                # ---------------------------------------------
+
+                if "reasoning" in message:
+
+                    with st.expander(
+                        "🧠 Agent Reasoning",
+                        expanded=False,
+                    ):
+
+                        for step, icon in message["reasoning"]:
+
+                            st.markdown(
+                                f"{icon} {step}"
+                            )
+
+                        st.divider()
+
+                        st.caption(
+                            "Execution steps shown here are "
+                            "currently representative placeholders. "
+                            "Live LangGraph reasoning will be "
+                            "connected during backend integration."
+                        )
+
+    # =========================================================
+    # PENDING SUGGESTION
+    # =========================================================
+
+    pending_prompt = st.session_state.pop(
+        "pending_prompt",
+        None,
+    )
+
     prompt = st.chat_input(
-    "Ask OmniBrain anything...",
-    key="chat_input",
-)
+        "Ask OmniBrain anything...",
+        key="chat_input",
+    )
+
+    if pending_prompt:
+        prompt = pending_prompt
+
+    # =========================================================
+    # PROCESS NEW QUESTION
+    # =========================================================
 
     if prompt:
-        # FIX: Reset pagination back to page 1 on new user input
+
         st.session_state.chat_page = 1
 
-        # User message
+        # -----------------------------------------------------
+        # Save user message
+        # -----------------------------------------------------
+
         st.session_state.messages.append(
             {
                 "role": "user",
@@ -132,90 +346,242 @@ Use clear, specific questions for the best results.
             }
         )
 
-        with st.chat_message("user", avatar="👤"):
+        with st.chat_message(
+            "user",
+            avatar="👤",
+        ):
+
             st.markdown(prompt)
 
-        # Assistant processing & streaming pipeline
-        with st.chat_message("assistant", avatar="🤖"):
+        # =====================================================
+        # ASSISTANT RESPONSE
+        # =====================================================
+
+        with st.chat_message(
+            "assistant",
+            avatar="🤖",
+        ):
+
+            # -------------------------------------------------
+            # Prompt safety
+            # -------------------------------------------------
+
             guardrail_status = st.status(
-                "🛡️ Checking user prompt against safety policies...",
+                "🛡️ Checking prompt safety...",
                 expanded=False,
             )
-            time.sleep(1)
+
+            time.sleep(0.5)
+
             guardrail_status.update(
                 label="✅ Prompt passed safety validation",
                 state="complete",
             )
 
-            st.info("🔄 Retrying search with optimized query...")
-            st.code(
-                "Compare annual revenue trends from the uploaded financial report.",
-                language="text",
+            # -------------------------------------------------
+            # Query optimization
+            # -------------------------------------------------
+
+            _html(
+                """
+                <div class="ob-processing-card">
+
+                    <div class="ob-processing-icon">
+                        🔄
+                    </div>
+
+                    <div>
+
+                        <strong>
+                            Optimizing your query
+                        </strong>
+
+                        <div>
+                            Rewriting the question for better retrieval
+                        </div>
+
+                    </div>
+
+                </div>
+                """
             )
 
-            status = st.status(
-                "🟡 Grading retrieved documents...",
+            time.sleep(0.4)
+
+            # -------------------------------------------------
+            # Document retrieval
+            # -------------------------------------------------
+
+            document_status = st.status(
+                "📚 Searching and grading retrieved documents...",
                 expanded=False,
             )
-            with st.spinner("Analyzing retrieved context..."):
-                time.sleep(2)
 
-            status.update(
-                label="✅ Document grading completed",
+            with st.spinner(
+                "Analyzing retrieved context..."
+            ):
+
+                time.sleep(1)
+
+            document_status.update(
+                label="✅ Relevant context identified",
                 state="complete",
             )
 
+            # =================================================
+            # PLACEHOLDER RESPONSE
+            # =================================================
+
             response = (
                 "This is a placeholder response from OmniBrain.\n\n"
-                "Backend integration with the LangGraph agent will be connected in the next milestone."
+                "The frontend chat experience is ready. "
+                "Backend integration with the LangGraph agent "
+                "will provide the real grounded response."
             )
+
+            # -------------------------------------------------
+            # Streaming
+            # -------------------------------------------------
 
             placeholder = st.empty()
+
             streamed_text = ""
+
             for word in response.split():
+
                 streamed_text += word + " "
-                placeholder.markdown(streamed_text)
-                time.sleep(0.05)
 
-            with st.container():
-                st.caption("📚 Retrieved Context")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric(label="Documents Retrieved", value="4")
-                with col2:
-                    st.metric(label="Confidence", value="92%")
-                st.caption("Source: Annual_Report_2025.pdf • Pages 12–18 (Placeholder)")
+                placeholder.markdown(
+                    streamed_text
+                )
 
-            vision_image = "https://placehold.co/700x350/png?text=Vision+Agent+Output"
-            st.image(
-                vision_image,
-                caption="Image referenced by the Vision Agent",
-                width=500,
+                time.sleep(0.035)
+
+            # =================================================
+            # RETRIEVED CONTEXT
+            # =================================================
+
+            _html(
+                """
+                <div class="ob-chat-section-label">
+                    📚 RETRIEVED CONTEXT
+                </div>
+                """
             )
-            st.caption("🖼️ Accessible image preview for Vision Agent output.")
+
+            context_col1, context_col2 = st.columns(2)
+
+            with context_col1:
+
+                st.metric(
+                    label="Documents Retrieved",
+                    value="4",
+                )
+
+            with context_col2:
+
+                st.metric(
+                    label="Confidence",
+                    value="92%",
+                )
+
+            st.caption(
+                "Source: Annual_Report_2025.pdf • "
+                "Pages 12–18 • Placeholder"
+            )
+
+            # =================================================
+            # VISION AGENT
+            # =================================================
+
+            _html(
+                """
+                <div class="ob-chat-section-label">
+                    🖼️ VISION AGENT
+                </div>
+                """
+            )
+
+            _html(
+    """
+                <div class="ob-vision-placeholder">
+
+                    <div class="ob-vision-placeholder-icon">
+                        👁️
+                </div>
+
+                <h3>Vision Agent Output</h3>
+
+                <p>
+                    Charts, figures, scanned tables and images
+                    extracted from your documents will appear here.
+                </p>
+
+                <div class="ob-vision-status">
+                    <span class="ob-status-dot"></span>
+                    Vision processing ready
+                </div>
+
+            </div>
+    """
+)
+
+            # =================================================
+            # AGENT REASONING
+            # =================================================
+
             reasoning_steps = [
                 ("Question received", "✅"),
                 ("Analyzing user query", "🔍"),
-                ("Retrieved relevant document chunks", "📄"),
-                ("Vision agent selected an image", "🖼️"),
-                ("Generated final response", "🤖"),
+                (
+                    "Retrieved relevant document chunks",
+                    "📄",
+                ),
+                (
+                    "Vision agent selected an image",
+                    "🖼️",
+                ),
+                (
+                    "Generated final response",
+                    "🤖",
+                ),
             ]
 
-            with st.expander("🧠 Agent Reasoning", expanded=False):
+            with st.expander(
+                "🧠 Agent Reasoning",
+                expanded=False,
+            ):
+
                 for step, icon in reasoning_steps:
-                    st.markdown(f"{icon} {step}")
+
+                    st.markdown(
+                        f"{icon} {step}"
+                    )
+
                 st.divider()
+
                 st.caption(
-                    "This reasoning panel currently displays placeholder execution steps. "
-                    "Live LangGraph reasoning will be integrated in future milestones."
+                    "Execution steps currently represent "
+                    "the frontend demonstration flow. "
+                    "Live LangGraph reasoning will be "
+                    "connected during backend integration."
                 )
 
-        # Save assistant message to session state
+        # =====================================================
+        # SAVE ASSISTANT MESSAGE
+        # =====================================================
+
         st.session_state.messages.append(
             {
                 "role": "assistant",
                 "content": response,
-                "image": vision_image,
+                "context": (
+                    "Annual_Report_2025.pdf • "
+                    "Pages 12–18 (Placeholder)"
+                ),
+                "documents": "4",
+                "confidence": "92%",
+                
                 "reasoning": reasoning_steps,
             }
         )
