@@ -12,12 +12,18 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     API_V1_STR: str = "/api/v1"
 
-    # OpenAI Key (इसे .env से रीड करने के लिए फ़ील्ड सेट किया है)
+    # Gemini API configuration
+    GEMINI_API_KEY: str = Field(default="")
+    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
+
+    # OpenAI Key
     OPENAI_API_KEY: str = Field(default="mock-key-for-test")
-    
+
+    # API authentication
     API_KEY: str = Field(default="omnibrain-super-secret-api-key")
     API_KEY_NAME: str = "X-API-Key"
-    
+
     # SQL Agent
     SQL_AGENT_MODEL: str = "gpt-4o"
     TEMPERATURE: float = 0.0
