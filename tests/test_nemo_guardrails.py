@@ -3,8 +3,13 @@ tests/test_nemo_guardrails.py
 """
 
 import pytest
-# pyrefly: ignore [missing-import]
-from backend.app.agents.safety.nemo_guardrails import load_omnibrain_guardrails
+try:
+    from backend.app.agents.safety.nemo_guardrails import load_omnibrain_guardrails, NEMO_AVAILABLE
+except ImportError:
+    NEMO_AVAILABLE = False
+
+if not NEMO_AVAILABLE:
+    pytest.skip("nemoguardrails is not installed or available.", allow_module_level=True)
 
 
 @pytest.fixture

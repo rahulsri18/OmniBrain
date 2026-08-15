@@ -16,7 +16,13 @@ from pathlib import Path
 from types import MethodType
 from typing import Any, Dict, List, Optional
 
-from nemoguardrails import LLMRails, RailsConfig
+try:
+    from nemoguardrails import LLMRails, RailsConfig
+    NEMO_AVAILABLE = True
+except ImportError:
+    LLMRails = Any
+    RailsConfig = Any
+    NEMO_AVAILABLE = False
 
 from agents.safety.ban_list import get_enabled_keywords
 
@@ -153,6 +159,9 @@ def load_omnibrain_guardrails() -> LLMRails:
     This avoids unnecessary LLM calls for deterministic safety checks
     and therefore does not require OPENAI_API_KEY for these tests.
     """
+
+    if not NEMO_AVAILABLE:
+        raise ImportError("nemoguardrails is not installed or available in this environment.")
 
     config = RailsConfig.from_path(str(CONFIG_DIR))
 
