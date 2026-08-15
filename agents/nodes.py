@@ -284,10 +284,6 @@ def retriever_node(state: GraphState) -> GraphState:
 
 @trace_node("merge")
 def merge_node(state: GraphState) -> GraphState:
-    """
-    Merge outputs from SQL and Retriever branches.
-    """
-
     merged_context = []
 
     if state.get("retriever_result"):
@@ -297,8 +293,7 @@ def merge_node(state: GraphState) -> GraphState:
         merged_context.append(str(state["sql_result"]))
 
     state["merged_context"] = merged_context
-    state["context"] = merged_context
-
+    state["context"] = merged_context   # now a clean overwrite, not an append
     return state
 async def fallback_node(state: GraphState) -> GraphState:
     """
@@ -328,5 +323,34 @@ async def fallback_node(state: GraphState) -> GraphState:
     })
 
     state["response"] = fallback_message
+    state["answer"] = fallback_message 
 
+    return state
+from langchain_core.messages import SystemMessage, HumanMessage
+
+GENERATION_SYSTEM_PROMPT = """You are OmniBrain, an assistant that answers questions using only the
+provided context. Cite the source of each claim where possible. If the context doesn't contain
+enough information to answer, say so clearly instead of guessing."""
+
+@trace_node("generate")
+async def generate_node(state: GraphState) -> GraphState:
+    """
+    Synthesizes a final natural-language answer from the merged/graded context.
+    Uses .astream() so LangGraph emits on_chat_model_stream events that
+    main.py's chat_stream() listens for.
+    """
+    context_text = "\n\n".join(state.get("context", [])) or "No relevant context was found."
+
+    messages = [
+        SystemMessage(content=GENERATION_SYSTEM_PROMPT),
+        HumanMessage(content=f"Context:\n{context_text}\n\nQuestion: {state['question']}"),
+    ]
+
+    full_response = ""
+    async for chunk in llm.astream(messages):
+        if chunk.content:
+            full_response += chunk.content
+
+    state["response"] = full_response
+    state["answer"] = full_response   # also populate this so output_guardrail's check is meaningful
     return state

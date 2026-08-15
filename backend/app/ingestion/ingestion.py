@@ -12,9 +12,8 @@ PDF
 """
 
 from pathlib import Path
-from ..utils.pdf_parser import PDFParser  # 🚀 पाथ को प्रोजेक्ट के हिसाब से सही किया
+from ..utils.pdf_parser import PDFParser
 
-# 🚀 M4 विज़न मॉड्यूल इम्पोर्ट्स
 from ..utils.vision_extractor import PDFVisionExtractor
 from ..vectordb.qdrant_client import QdrantDB
 from .chunker import TextChunker
@@ -24,12 +23,10 @@ from .vision_pipeline import VisionIngestionPipeline
 
 class IngestionPipeline:
     def __init__(self):
-        # M2 और M5 का फिक्स्ड चंकर लॉजिक (अब पैरामीटर्स .env से रीड हो रहे हैं)
         self.chunker = TextChunker()
         self.embedder = EmbeddingGenerator()
-        self.db = QdrantDB()  # यह अपने आप .env से 384 साइज़ उठा लेगा
+        self.db = QdrantDB()
 
-        # 🚀 M4 विज़न पाइपलाइन कंपोनेंट्स को इनिशियलाइज़ किया
         self.vision_extractor = PDFVisionExtractor()
         self.vision_pipeline = VisionIngestionPipeline()
 
@@ -46,7 +43,6 @@ class IngestionPipeline:
         print("=" * 60)
 
         # =========================================================
-        # 📝 भाग 1: टेक्स्ट इनजेशन फ्लो (Text Ingestion Flow)
         # =========================================================
         print("\n--- Processing Text Content ---")
         try:
@@ -101,11 +97,9 @@ class IngestionPipeline:
             if not text or not text.strip():
                     raise ValueError("No readable text found in the uploaded PDF.")
             else:
-                # टेक्स्ट को चंक्स में बदलो
                 chunks = self.chunker.split_text(text)
                 print(f"Generated {len(chunks)} text chunks.")
 
-                # मेटाडेटा तैयार करो
                 metadata = [
                     {
                         "file_name": pdf_path.name,
@@ -119,11 +113,9 @@ class IngestionPipeline:
         if chunks:
             print(f"Generated {len(chunks)} text chunks.")
 
-            # एम्बेडिंग्स जनरेट करो (SentenceTransformers - 384 dim)
             embeddings = self.embedder.generate_embeddings(chunks)
             print(f"Generated {len(embeddings)} text embeddings.")
 
-            # Qdrant के टेक्स्ट कलेक्शन में सेव करो
             print("Saving text vectors into Qdrant...")
             self.db.insert_vectors(
                 chunks=chunks,
@@ -133,11 +125,9 @@ class IngestionPipeline:
             print("Text content successfully stored.")
 
         # =========================================================
-        # 🚀 भाग 2: विज़न इनजेशन फ्लो (M4 Vision Ingestion Flow)
         # =========================================================
         print("\n--- Processing Visual Content (Images/Charts) ---")
 
-        # 1. PDF से इमेज निकालो और लो-क्वालिटी फ़िल्टर करो (Day 2 & Day 5)
         try:
             extracted_images = self.vision_extractor.extract_images_from_pdf(str(pdf_path))
         except Exception as e:
@@ -145,7 +135,6 @@ class IngestionPipeline:
             extracted_images = []
         print(f"Extracted {len(extracted_images)} high-quality charts/images.")
 
-        # 2. अगर इमेजेस मिली हैं, तो CLIP वेक्टर्स बनाकर स्टोर करो (Day 3 & Day 4)
         if extracted_images:
             print("Processing image features via CLIP and saving to Qdrant...")
             self.vision_pipeline.ingest_extracted_images(

@@ -111,25 +111,14 @@ def route_after_supervisor(state: GraphState) -> list[str]:
 # ==========================================================
 
 def route_after_grader(state: GraphState) -> str:
-    """
-    Decide whether to:
-        - retry retrieval using query rewriting
-        - accept the current result
-    """
-
     grade = state.get("metadata", {}).get("grade", "accept")
-
     loop_count = state.get("loop_count", 0)
+    max_loops = state.get("max_loops", 3)
 
-    # Context is good
     if grade == "accept":
         return "accept"
-
-    # Context is poor, but retry limit reached
-    if loop_count >= MAX_LOOPS:
+    if loop_count >= max_loops:
         return "accept"
-
-    # Context is poor, retry
     return "retry"
 
 
@@ -340,3 +329,29 @@ builder.add_edge(
 app_graph = builder.compile()
 
 graph = app_graph
+from agents.nodes import (
+    router_node,
+    sql_node,
+    retriever_node,
+    merge_node,
+    grader_node,
+    query_rewriter_node,
+    fallback_node,
+    generate_node,   # add this
+)
+
+# ... after builder.add_node("grader", grader_node):
+builder.add_node("generate", generate_node)
+
+# Change the grader's "accept" edge target:
+builder.add_conditional_edges(
+    "grader",
+    route_after_grader,
+    {
+        "retry": "query_rewriter",
+        "accept": "generate",       # was "output_rail" — now generate first
+    },
+)
+
+# New edge: generate -> output_rail
+builder.add_edge("generate", "output_rail")

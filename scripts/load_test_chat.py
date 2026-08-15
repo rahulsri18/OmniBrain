@@ -12,10 +12,9 @@ import statistics
 import aiohttp
 from typing import List, Dict, Any
 
-# ⚙️ कॉन्फ़िगरेशन
-TARGET_URL = "http://127.0.0.1:8000/api/v1/chat"  # आपकी FastAPI चैट एंडपॉइंट
-CONCURRENT_USERS = 10                              # कितने पैरेलल यूज़र्स सिमुलेट करने हैं
-TOTAL_REQUESTS = 50                                # कुल कितनी रिक्वेस्ट्स भेजनी हैं
+TARGET_URL = "http://127.0.0.1:8000/api/v1/chat"
+CONCURRENT_USERS = 10
+TOTAL_REQUESTS = 50
 PROMPT = "Explain the architecture of a Retrieval-Augmented Generation system in detail."
 
 
@@ -93,7 +92,6 @@ async def run_load_test():
         tasks = [worker(session, i + 1) for i in range(TOTAL_REQUESTS)]
         results = await asyncio.gather(*tasks)
 
-    # 📊 परफॉरमेंस एग्रीगेशन और रिपोर्ट जनरेशन
     successful = [r for r in results if r["status"] == "SUCCESS"]
     failed = [r for r in results if r["status"] != "SUCCESS"]
 
@@ -122,12 +120,11 @@ async def run_load_test():
 
     if failed:
         print("\n--- Failure Logs ---")
-        for f in failed[:5]:  # टॉप 5 फेल्योर्स दिखाएं
+        for f in failed[:5]:
             print(f"Req #{f['request_id']}: {f.get('error')}")
 
     print("=" * 65)
 
 
 if __name__ == "__main__":
-    # Script चलाने के लिए aiohttp इंस्टॉल होना चाहिए: pip install aiohttp
     asyncio.run(run_load_test())

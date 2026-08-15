@@ -19,7 +19,6 @@ load_css()
 
 
 
-# Sidebar और Components इम्पोर्ट करें
 from components.sidebar import render_sidebar
 from components.header import render_header
 from components.uploader import render_uploader
@@ -27,21 +26,16 @@ from components.document_table import render_document_table
 from components.chat import render_chat
 from components.landing import render_landing, render_footer
 
-# साइडबार रेंडर करें
 render_sidebar()
 
-# डिफ़ॉल्ट पेज: Home (नया लैंडिंग एक्सपीरियंस)
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Home"
 
-# पेज राउटिंग लॉजिक
 if st.session_state.get("current_page") == "Home":
-    # लैंडिंग पेज खुद अपना हीरो/स्टेटस रेंडर करता है, अलग हेडर की जरूरत नहीं
     render_landing()
 
 elif st.session_state.get("current_page") == "Upload":
     render_header()
-    # मुख्य पेज पर अपलोडर और टेबल को अगल-बगल (Columns) में दिखाएं ताकि यूआई धांसू लगे
     col1, col2 = st.columns([1, 1], gap="large")
 
     with col1:

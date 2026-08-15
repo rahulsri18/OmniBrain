@@ -20,7 +20,7 @@ except ImportError:
 
 
 class SessionManager:
-    def __init__(self, ttl_seconds: int = 86400):  # 24 घंटे डिफ़ॉल्ट TTL (Expiry)
+    def __init__(self, ttl_seconds: int = 86400):
         self.ttl_seconds = ttl_seconds
         self.redis_url = os.getenv("REDIS_URL", None)
         self.use_redis = REDIS_AVAILABLE and bool(self.redis_url)
@@ -39,9 +39,6 @@ class SessionManager:
             self._in_memory_store: Dict[str, Dict[str, Any]] = {}
 
     def create_session(self, user_id: Optional[str] = None, metadata: Optional[dict] = None) -> str:
-        """
-        नया यूनिक session_id जनरेट करता है और सेशन इनिशियलाइज़ करता है।
-        """
         session_id = f"session_{uuid.uuid4().hex[:12]}"
         created_at = time.time()
 
@@ -65,9 +62,6 @@ class SessionManager:
         return session_id
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """
-        सेशन डेटा और हिस्ट्री को फेच करता है।
-        """
         if self.use_redis:
             import json
             key = f"omnibrain:session:{session_id}"
@@ -79,9 +73,6 @@ class SessionManager:
             return self._in_memory_store.get(session_id)
 
     def add_message(self, session_id: str, role: str, content: str) -> bool:
-        """
-        किसी सेशन की हिस्ट्री में यूजर या असिस्टेंट का नया मैसेज जोड़ता है।
-        """
         session = self.get_session(session_id)
         if not session:
             logger.warning(f"Attempted to add message to non-existent session: {session_id}")
@@ -106,18 +97,12 @@ class SessionManager:
         return True
 
     def get_history(self, session_id: str) -> List[Dict[str, Any]]:
-        """
-        किसी सेशन की पूरी चैट हिस्ट्री रिटर्न करता है।
-        """
         session = self.get_session(session_id)
         if session:
             return session.get("history", [])
         return []
 
     def clear_session(self, session_id: str) -> bool:
-        """
-        किसी सेशन को डिलीट / क्लियर करता है।
-        """
         if self.use_redis:
             key = f"omnibrain:session:{session_id}"
             result = self.redis_client.delete(key)

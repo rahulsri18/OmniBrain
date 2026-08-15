@@ -1,6 +1,8 @@
+import os
 import requests
 
-BASE_URL = "http://backend:8000/api/v1"
+BACKEND_URL = os.getenv("NEXT_PUBLIC_API_URL", "http://localhost:8000")
+BASE_URL = f"{BACKEND_URL}/api/v1"
 
 
 def upload_pdf(uploaded_file):

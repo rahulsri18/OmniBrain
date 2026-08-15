@@ -9,8 +9,11 @@ Single, coherent implementation:
    so we never burn an API call on an unreadable image.
 3. If the image passes, encode it and call the real vision LLM
    (GPT-4o) using the strict numerical-accuracy system prompt.
+   The call now streams via .astream() (not .invoke()) so LangGraph
+   emits on_chat_model_stream events that main.py's chat_stream()
+   listens for.
 4. On any failure, set image_error / error so the graph's
-   route_after_vision() can divert to the fallback node.
+   route_after_vision() / grader can divert to the fallback node.
 """
 
 import os
@@ -20,7 +23,6 @@ from typing import Any, Dict, Optional
 import cv2
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from agents.langfuse_tracing import trace_node
 
 from backend.app.config import settings
 from backend.app.logger import logger
@@ -64,15 +66,19 @@ def detect_blur(image_path: str, threshold: float = 80.0) -> bool:
 class VisionSubAgent:
     """Wraps the GPT-4o multimodal call for chart/graph analysis."""
 
-    def __init__(self, model_name: str | None = None):
+    def __init__(self, model_name: str = "gpt-4o"):
         self.llm = ChatOpenAI(
-            model=model_name or settings.GEMINI_MODEL,
-            api_key=settings.GEMINI_API_KEY,
-            base_url=settings.GEMINI_BASE_URL,
-            temperature=0.0,
+            model=model_name,
+            api_key=settings.OPENAI_API_KEY,
+            temperature=0.0,  # strict, to avoid hallucinated numbers
         )
 
-    def analyze_chart_or_graph(self, user_query: str, image_path: str) -> str:
+    async def analyze_chart_or_graph(self, user_query: str, image_path: str) -> str:
+        """
+        Streams the vision LLM's response token-by-token via .astream(),
+        so LangGraph fires on_chat_model_stream events for the caller
+        (main.py's chat_stream) to forward over SSE.
+        """
         base64_image = encode_image_to_base64(image_path)
         if not base64_image:
             return "Unable to process the image file. Please verify the image path."
@@ -95,8 +101,11 @@ class VisionSubAgent:
 
         try:
             logger.info(f"VisionSubAgent analyzing image: {image_path}")
-            response = self.llm.invoke(messages)
-            return response.content
+            full_response = ""
+            async for chunk in self.llm.astream(messages):
+                if chunk.content:
+                    full_response += chunk.content
+            return full_response
         except Exception as e:
             logger.error(f"Error during Vision LLM invocation: {e}")
             return f"Failed to analyze the image due to an error: {str(e)}"
@@ -106,8 +115,7 @@ class VisionSubAgent:
 # LangGraph node
 # ---------------------------------------------------------------------------
 
-@trace_node("vision")
-def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
+async def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     LangGraph node for vision analysis. Runs blur detection first;
     only calls the real vision LLM if the image passes quality checks.
@@ -130,7 +138,7 @@ def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     # 3. Extract the user's question from the last message, if present.
-    user_query = "Summarize and analyze the key insights from this chart."
+    user_query = state.get("question") or "Summarize and analyze the key insights from this chart."
     if messages:
         last_msg = messages[-1]
         user_query = (
@@ -139,15 +147,17 @@ def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             else getattr(last_msg, "content", user_query)
         )
 
-    # 4. Real vision call.
+    # 4. Real vision call (streamed).
     agent = VisionSubAgent()
-    analysis_result = agent.analyze_chart_or_graph(user_query=user_query, image_path=file_path)
+    analysis_result = await agent.analyze_chart_or_graph(user_query=user_query, image_path=file_path)
 
     new_messages = list(messages)
     new_messages.append({"role": "assistant", "content": analysis_result})
 
     return {
         "messages": new_messages,
-        "context": analysis_result,
+        "context": [analysis_result],
+        "response": analysis_result,
+        "answer": analysis_result,
         "image_error": False,
     }

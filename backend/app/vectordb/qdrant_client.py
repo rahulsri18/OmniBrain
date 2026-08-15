@@ -41,7 +41,6 @@ class QdrantDB:
         collection_name: Optional[str] = None,
         vector_size: Optional[int] = None,
     ):
-        # .env से वैल्यू उठाएगा, नहीं तो लोकल मॉडल का डिफॉल्ट (384) लेगा
         self.collection_name = collection_name or os.getenv("COLLECTION_NAME", "omnibrain")
         self.vector_size = vector_size or int(os.getenv("VECTOR_SIZE", "384"))
 

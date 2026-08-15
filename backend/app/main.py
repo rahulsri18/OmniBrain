@@ -19,9 +19,9 @@ from urllib.request import urlopen
 # Import compiled graph safely
 try:
     from agents.graph import app_graph
-    print("✅ LangGraph imported successfully:", app_graph)
+    print("LangGraph imported successfully:", app_graph)
 except Exception as e:
-    print("❌ LangGraph import failed:", repr(e))
+    print("LangGraph import failed:", repr(e))
     raise
 
 app = FastAPI(title="OmniBrain Backend", version="0.1.0")
@@ -147,19 +147,18 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+from agents.state import create_initial_state
+
 async def chat_stream(message: str, session_id: str = None, file_path: str = None):
-    """Core Event Streamer wrapping LangGraph execution."""
     async def event_generator():
         if app_graph is None:
             yield {"type": "error", "content": "LangGraph instance is not initialized on the server."}
             return
 
-        initial_state = {
-            "messages": [{"role": "user", "content": message}],
-            "session_id": session_id,
-            "file_path": file_path,
-            "question": message,
-        }
+        initial_state = create_initial_state(message)
+        initial_state["session_id"] = session_id
+        initial_state["file_path"] = file_path
+        initial_state["messages"] = [{"role": "user", "content": message}]
 
         try:
             async for event in app_graph.astream_events(initial_state, version="v2"):

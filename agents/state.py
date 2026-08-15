@@ -14,7 +14,7 @@ class GraphState(TypedDict):
     chat_history: Annotated[List[Dict[str, str]], operator.add]
 
     # Retrieved context
-    context: Annotated[List[str], operator.add]
+    context: List[str]
 
     # Final LLM response
     response: str

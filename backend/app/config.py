@@ -42,5 +42,4 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-# यह वो 'settings' वेरिएबल है जिसे हम इम्पोर्ट कर रहे हैं
 settings = Settings()
