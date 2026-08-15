@@ -39,20 +39,28 @@ transformer = QueryTransformer(
 @trace_node("router")
 def router_node(state: GraphState) -> GraphState:
     """
-    Supervisor node that routes the query.
+    Supervisor node that only decides which route should execute.
 
-    Uses deterministic keyword routing for clear-cut cases and
-    GPT-4o for ambiguous queries.
+    Routes:
+    - sql
+    - retriever
+    - vision
+    - hybrid
+    - general
+
+    IMPORTANT:
+    This node does NOT execute SQL or retrieval.
+    The graph sends the state to the appropriate execution node.
     """
 
     question = state["question"].strip()
     question_lower = question.lower()
+    file_path = state.get("file_path")
 
     # ==========================================================
-    # Deterministic routing for clear-cut cases
+    # Keyword groups
     # ==========================================================
 
-    # 1. Vision-related queries
     vision_keywords = [
         "image",
         "picture",
@@ -66,53 +74,79 @@ def router_node(state: GraphState) -> GraphState:
         "describe this image",
     ]
 
-    if any(keyword in question_lower for keyword in vision_keywords):
+    sql_keywords = [
+        "database",
+        "sql",
+        "sales",
+        "customers",
+        "customer",
+        "employees",
+        "employee",
+        "salary",
+        "salaries",
+        "total",
+        "count",
+        "records",
+        "rows",
+        "table",
+        "region",
+        "active customers",
+    ]
+
+    retriever_keywords = [
+        "pdf",
+        "document",
+        "uploaded document",
+        "uploaded pdf",
+        "page ",
+        "contract",
+        "report",
+        "summarize my uploaded",
+        "summarize the uploaded",
+        "according to the document",
+        "in the document",
+    ]
+
+    # ==========================================================
+    # Detect query types
+    # ==========================================================
+
+    is_vision = any(
+        keyword in question_lower
+        for keyword in vision_keywords
+    )
+
+    is_sql = any(
+        keyword in question_lower
+        for keyword in sql_keywords
+    )
+
+    is_retriever = any(
+        keyword in question_lower
+        for keyword in retriever_keywords
+    )
+
+    # ==========================================================
+    # Deterministic routing
+    # ==========================================================
+
+    # Vision takes priority
+    if is_vision:
         route = "vision"
 
-    # 2. SQL / database-related queries
-    elif any(
-        keyword in question_lower
-        for keyword in [
-            "database",
-            "sql",
-            "sales",
-            "customers",
-            "customer",
-            "employees",
-            "employee",
-            "salary",
-            "salaries",
-            "total",
-            "count",
-            "records",
-            "rows",
-            "table",
-            "region",
-            "active customers",
-        ]
-    ):
+    # Query needs both SQL + document retrieval
+    elif is_sql and is_retriever:
+        route = "hybrid"
+
+    # SQL only
+    elif is_sql:
         route = "sql"
 
-    # 3. Document / PDF / page-related queries
-    elif any(
-        keyword in question_lower
-        for keyword in [
-            "pdf",
-            "document",
-            "uploaded document",
-            "uploaded pdf",
-            "page ",
-            "contract",
-            "report",
-            "summarize my uploaded",
-            "summarize the uploaded",
-            "according to the document",
-            "in the document",
-        ]
-    ):
+    # Document / PDF only
+    elif is_retriever:
         route = "retriever"
 
-    # 4. Greetings / clearly general queries
+    # Greetings / clearly general
     elif any(
         question_lower.startswith(greeting)
         for greeting in [
@@ -125,9 +159,14 @@ def router_node(state: GraphState) -> GraphState:
         ]
     ):
         route = "general"
+        
+    # If a document is attached/provided and the query is not
+    # clearly SQL or vision-related, use document retrieval.
+    elif file_path:
+        route = "retriever"
 
     # ==========================================================
-    # GPT-4o fallback for ambiguous queries
+    # LLM fallback for ambiguous questions
     # ==========================================================
     else:
         messages = [
@@ -139,32 +178,22 @@ def router_node(state: GraphState) -> GraphState:
 
         route = response.content.strip().lower()
 
-        valid_routes = {"retriever", "sql", "vision", "general"}
+        valid_routes = {
+            "retriever",
+            "sql",
+            "vision",
+            "hybrid",
+            "general",
+        }
 
         if route not in valid_routes:
             route = "general"
 
+    # ==========================================================
+    # Store route only
+    # ==========================================================
+
     state["route"] = route
-
-    # ==========================================================
-    # SQL Route
-    # ==========================================================
-    if route == "sql":
-        sql_query = sql_agent_node(state["question"])
-
-        state.setdefault("metadata", {})
-        state["metadata"]["sql_query"] = sql_query
-
-        return state
-
-    # ==========================================================
-    # Retriever / Vision / General Routes
-    # ==========================================================
-    raw_documents = retriever_tool(state["question"])
-
-    clean_context_list = parse_retriever_output(raw_documents)
-
-    state["context"] = clean_context_list
 
     return state
 
