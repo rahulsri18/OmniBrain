@@ -30,20 +30,19 @@ async def stream_formatter(
 
                 # 🚨 Handle Explicit Error Tokens from Stream
                 if event_type == "error":
-                    error_msg = event.get("content") or event.get("message") or "An streaming error occurred"
+                    error_msg = event.get("content") or event.get("message") or "An streaming error occurred."
+                    logger.error(f"SSE Stream Formatter caught Error Event: {error_msg}")
 
-                    logger.error(
-                        f"SSE Stream Formatter caught Error Event: {error_msg}"
-                    )
 
-                    error_data = {
+                    error_payload = json.dumps({
                         "type": "error",
                         "status": event.get("status", "error"),
                         "reason": event.get("reason"),
-                        "message": error_msg,
-                    }
+                        "message": error_msg
+                    })
 
-                    yield f"data: {json.dumps(error_data)}\n\n"
+
+                    yield f"data: {error_payload}\n\n"
                     continue
 
                 # 💬 Stream Content / Assistant Tokens
