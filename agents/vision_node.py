@@ -161,3 +161,37 @@ async def vision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "answer": analysis_result,
         "image_error": False,
     }
+
+async def execute_vision_agent(
+    image_path: str,
+    question: str,
+    vision_llm,
+    use_backup_rephraser: bool = False,
+    raw_previous_output: str = "",
+):
+    """
+    Compatibility function required by
+    tests/test_vision_backup_prompt.py.
+    """
+
+    if use_backup_rephraser and raw_previous_output:
+
+        prompt = (
+            f"Question: {question}\n\n"
+            f"Raw OCR Output:\n{raw_previous_output}\n\n"
+            "Rewrite this into a clear summary."
+        )
+
+        response = await vision_llm.ainvoke(prompt)
+
+        return {
+            "vision_output": response.content,
+            "is_rephrased": True,
+            "image_error": False,
+        }
+
+    return {
+        "vision_output": raw_previous_output,
+        "is_rephrased": False,
+        "image_error": False,
+    }
