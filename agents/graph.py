@@ -99,12 +99,19 @@ def route_after_supervisor(state: GraphState) -> list[str]:
     # Therefore fallback is used until a proper general node
     # is added.
     # ------------------------------------------------------
+    if route == "sql":
+        return ["sql"]
+
+    if route == "retriever":
+        return ["retriever"]
+
+    if route  == "vision":
+        return ["vision"]
+
     if route == "general":
-        return ["fallback"]
+        return ["retriever"]
 
-    # Safety fallback
-    return ["fallback"]
-
+    return ["retriever"]
 
 # ==========================================================
 # 2. Grader Routing
@@ -329,29 +336,3 @@ builder.add_edge(
 app_graph = builder.compile()
 
 graph = app_graph
-from agents.nodes import (
-    router_node,
-    sql_node,
-    retriever_node,
-    merge_node,
-    grader_node,
-    query_rewriter_node,
-    fallback_node,
-    generate_node,   # add this
-)
-
-# ... after builder.add_node("grader", grader_node):
-builder.add_node("generate", generate_node)
-
-# Change the grader's "accept" edge target:
-builder.add_conditional_edges(
-    "grader",
-    route_after_grader,
-    {
-        "retry": "query_rewriter",
-        "accept": "generate",       # was "output_rail" — now generate first
-    },
-)
-
-# New edge: generate -> output_rail
-builder.add_edge("generate", "output_rail")
