@@ -91,12 +91,17 @@ def route_after_supervisor(state: GraphState) -> list[str]:
     if route == "vision":
         return ["vision"]
 
+    # ------------------------------------------------------
+    # General / unknown route
+    #
+    # There is currently no general_node in your project.
+    # Therefore fallback is used until a proper general node
+    # is added.
+    # ------------------------------------------------------
     if route == "general":
-        return ["fallback"]
+        return ["retriever"]
 
-    # Safety fallback
-    return ["fallback"]
-
+    return ["retriever"]
 
 # ==========================================================
 # 2. Grader Routing
