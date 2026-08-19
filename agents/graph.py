@@ -14,16 +14,18 @@ Supervisor / Router
   │            └─ RAG ───┤
   ├── Vision ────────────┤
   └── General/Fallback ──┤
-                          ↓
-                        Merge
-                          ↓
-                        Grader
-                       /      \
-                   retry      accept
-                     ↓           ↓
-               Query Rewriter  Output Rail
-                     ↓           ↓
-                 Supervisor     END
+                         ↓
+                       Merge
+                         ↓
+                       Grader
+                      /      \
+                  retry      accept
+                    ↓          ↓
+              Query Rewriter  Generate
+                    ↓          ↓
+               Supervisor   Output Rail
+                               ↓
+                              END
 """
 
 from langgraph.graph import StateGraph, END
@@ -38,6 +40,7 @@ from agents.nodes import (
     grader_node,
     query_rewriter_node,
     fallback_node,
+    generate_node,
 )
 
 from agents.guardrail import input_safety_rail_node
@@ -74,15 +77,11 @@ def route_after_supervisor(state: GraphState) -> list[str]:
 
     route = state.get("route", "general")
 
-    # ------------------------------------------------------
     # Hybrid = SQL + Retriever in parallel
-    # ------------------------------------------------------
     if route == "hybrid":
         return ["sql", "retriever"]
 
-    # ------------------------------------------------------
     # Individual routes
-    # ------------------------------------------------------
     if route == "sql":
         return ["sql"]
 
@@ -92,13 +91,6 @@ def route_after_supervisor(state: GraphState) -> list[str]:
     if route == "vision":
         return ["vision"]
 
-    # ------------------------------------------------------
-    # General / unknown route
-    #
-    # There is currently no general_node in your project.
-    # Therefore fallback is used until a proper general node
-    # is added.
-    # ------------------------------------------------------
     if route == "general":
         return ["fallback"]
 
@@ -113,7 +105,7 @@ def route_after_supervisor(state: GraphState) -> list[str]:
 def route_after_grader(state: GraphState) -> str:
     grade = state.get("metadata", {}).get("grade", "accept")
     loop_count = state.get("loop_count", 0)
-    max_loops = state.get("max_loops", 3)
+    max_loops = state.get("max_loops", MAX_LOOPS)
 
     if grade == "accept":
         return "accept"
@@ -123,7 +115,7 @@ def route_after_grader(state: GraphState) -> str:
 
 
 # ==========================================================
-# 3. Create Graph
+# 3. Create Graph Builder
 # ==========================================================
 
 builder = StateGraph(GraphState)
@@ -134,224 +126,80 @@ builder = StateGraph(GraphState)
 # ==========================================================
 
 # Entry / Safety
-builder.add_node(
-    "input_rail",
-    input_safety_rail_node,
-)
+builder.add_node("input_rail", input_safety_rail_node)
 
 # Supervisor
-builder.add_node(
-    "supervisor",
-    router_node,
-)
+builder.add_node("supervisor", router_node)
 
 # Retrieval / Execution
-builder.add_node(
-    "sql",
-    sql_node,
-)
-
-builder.add_node(
-    "retriever",
-    retriever_node,
-)
-
-builder.add_node(
-    "vision",
-    vision_node,
-)
+builder.add_node("sql", sql_node)
+builder.add_node("retriever", retriever_node)
+builder.add_node("vision", vision_node)
 
 # Merge
-builder.add_node(
-    "merge",
-    merge_node,
-)
+builder.add_node("merge", merge_node)
 
 # Self-RAG
-builder.add_node(
-    "grader",
-    grader_node,
-)
-
-builder.add_node(
-    "query_rewriter",
-    query_rewriter_node,
-)
+builder.add_node("grader", grader_node)
+builder.add_node("query_rewriter", query_rewriter_node)
+builder.add_node("generate", generate_node)
 
 # Error handling
-builder.add_node(
-    "fallback",
-    fallback_node,
-)
+builder.add_node("fallback", fallback_node)
 
 # Final safety
-builder.add_node(
-    "output_rail",
-    output_validation_rail_node,
-)
+builder.add_node("output_rail", output_validation_rail_node)
 
 
 # ==========================================================
-# 5. Entry Point
+# 5. Connect Edges & Flow
 # ==========================================================
 
+# Entry Point
 builder.set_entry_point("input_rail")
 
+# Input Safety → Supervisor
+builder.add_edge("input_rail", "supervisor")
 
-# ==========================================================
-# 6. Input Safety → Supervisor
-# ==========================================================
+# Supervisor → Execution Branches
+builder.add_conditional_edges("supervisor", route_after_supervisor)
 
-builder.add_edge(
-    "input_rail",
-    "supervisor",
-)
+# SQL / Retriever → Merge
+builder.add_edge("sql", "merge")
+builder.add_edge("retriever", "merge")
 
+# Merge → Grader
+builder.add_edge("merge", "grader")
 
-# ==========================================================
-# 7. Supervisor → Execution Branches
-# ==========================================================
-
-builder.add_conditional_edges(
-    "supervisor",
-    route_after_supervisor,
-)
-
-
-# ==========================================================
-# 8. SQL / Retriever → Merge
-#
-# For normal SQL:
-#
-#     supervisor
-#          ↓
-#         SQL
-#          ↓
-#        merge
-#
-# For normal Retriever:
-#
-#     supervisor
-#          ↓
-#      Retriever
-#          ↓
-#        merge
-#
-# For Hybrid:
-#
-#          ┌── SQL ───────┐
-# supervisor               → merge
-#          └── Retriever ─┘
-# ==========================================================
-
-builder.add_edge(
-    "sql",
-    "merge",
-)
-
-builder.add_edge(
-    "retriever",
-    "merge",
-)
-
-
-# ==========================================================
-# 9. Merge → Grader
-# ==========================================================
-
-builder.add_edge(
-    "merge",
-    "grader",
-)
-
-
-# ==========================================================
-# 10. Grader → Retry / Accept
-# ==========================================================
-
+# Grader → Retry / Accept
 builder.add_conditional_edges(
     "grader",
     route_after_grader,
     {
         "retry": "query_rewriter",
-        "accept": "output_rail",
+        "accept": "generate",
     },
 )
 
+# Query Rewriter → Supervisor (loop back)
+builder.add_edge("query_rewriter", "supervisor")
 
-# ==========================================================
-# 11. Query Rewriter → Supervisor
-#
-# The rewritten question goes back through the supervisor
-# so the route can be decided again.
-# ==========================================================
+# Generate → Output Rail
+builder.add_edge("generate", "output_rail")
 
-builder.add_edge(
-    "query_rewriter",
-    "supervisor",
-)
+# Vision → Output Rail
+builder.add_edge("vision", "output_rail")
 
+# Fallback → Output Rail
+builder.add_edge("fallback", "output_rail")
 
-# ==========================================================
-# 12. Vision → Output Rail
-# ==========================================================
-
-builder.add_edge(
-    "vision",
-    "output_rail",
-)
+# Output Rail → END
+builder.add_edge("output_rail", END)
 
 
 # ==========================================================
-# 13. Fallback → Output Rail
-# ==========================================================
-
-builder.add_edge(
-    "fallback",
-    "output_rail",
-)
-
-
-# ==========================================================
-# 14. Output Rail → END
-# ==========================================================
-
-builder.add_edge(
-    "output_rail",
-    END,
-)
-
-
-# ==========================================================
-# 15. Compile
+# 6. Compile Graph (STRICTLY AT THE VERY END)
 # ==========================================================
 
 app_graph = builder.compile()
-
 graph = app_graph
-from agents.nodes import (
-    router_node,
-    sql_node,
-    retriever_node,
-    merge_node,
-    grader_node,
-    query_rewriter_node,
-    fallback_node,
-    generate_node,   # add this
-)
-
-# ... after builder.add_node("grader", grader_node):
-builder.add_node("generate", generate_node)
-
-# Change the grader's "accept" edge target:
-builder.add_conditional_edges(
-    "grader",
-    route_after_grader,
-    {
-        "retry": "query_rewriter",
-        "accept": "generate",       # was "output_rail" — now generate first
-    },
-)
-
-# New edge: generate -> output_rail
-builder.add_edge("generate", "output_rail")

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -45,7 +46,6 @@ app.add_middleware(
     minimum_size=1000
 )
 
-
 # --- Global Exception Handler for Guardrails (Day 13) ---
 @app.exception_handler(GuardrailViolation)
 async def guardrail_exception_handler(
@@ -65,6 +65,26 @@ async def guardrail_exception_handler(
 ingestion_service = IngestionService()
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 REQUEST_TIMEOUT = 30  # seconds
+
+
+async def safe_background_ingestion(temp_file_path: str, filename: str):
+    """Safe wrapper for background ingestion tasks to log errors and prevent hanging states."""
+    try:
+        print(f"--- [INGESTION STARTED] Processing file: {filename} ---")
+        await ingestion_service.process_pipeline_from_path(temp_file_path, filename)
+        print(f"--- [INGESTION SUCCESS] Completed processing for: {filename} ---")
+    except Exception as e:
+        print(f"--- [INGESTION ERROR] Failed to process {filename}: {str(e)} ---")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # Cleanup temporary file safely
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+                print(f"--- [CLEANUP] Temp file removed: {temp_file_path} ---")
+            except Exception as cleanup_err:
+                print(f"--- [CLEANUP ERROR] Failed to remove temp file: {str(cleanup_err)} ---")
 
 
 @app.middleware("http")
@@ -110,7 +130,7 @@ async def upload_file(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    api_key: str = Depends(verify_api_key),
+    # api_key: str = Depends(verify_api_key),  <-- COMMENTED OUT FOR DEMO
 ):
     is_pdf_mime = file.content_type == "application/pdf"
     is_pdf_ext = file.filename.lower().endswith(".pdf")
@@ -133,7 +153,7 @@ async def upload_file(
         temp_file_path = await ingestion_service.save_file_temporarily(file)
 
         background_tasks.add_task(
-            ingestion_service.process_pipeline_from_path,
+            safe_background_ingestion,
             temp_file_path,
             file.filename,
         )
@@ -205,13 +225,9 @@ async def chat_stream(message: str, session_id: str = None, file_path: str = Non
 async def chat(
     request: Request,
     chat_request: ChatRequest,
-    api_key: str = Depends(verify_api_key),
+    # api_key: str = Depends(verify_api_key),  <-- COMMENTED OUT FOR DEMO
 ):
     """Clean Single Route for Chat Streaming with Error Guardrails."""
-    # Optional synchronous guardrail check before starting stream
-    # if is_violating_guardrail(request.message):
-    #     raise GuardrailViolation("Input prompt contains policy violations.")
-
     session_id = getattr(chat_request, "session_id", None)
     if not session_id or not session_manager.get_session(session_id):
         session_id = session_manager.create_session()
@@ -236,7 +252,7 @@ async def chat(
     response_description="Execution status"
 )
 async def execution_status(
-    api_key: str = Depends(verify_api_key),
+    # api_key: str = Depends(verify_api_key),  <-- COMMENTED OUT FOR DEMO
 ):
     """Live execution status endpoint."""
     return {
@@ -253,7 +269,7 @@ async def execution_status(
 )
 async def telemetry(
     session_id: str = Query(None),
-    api_key: str = Depends(verify_api_key),
+    # api_key: str = Depends(verify_api_key),  <-- COMMENTED OUT FOR DEMO
 ):
     """Telemetry endpoint for query rewrite statistics."""
     if session_id:

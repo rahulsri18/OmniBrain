@@ -82,6 +82,7 @@ Step 3: Build and Launch All Microservices
 Run the following command to build the Docker images and start all 4 services (Backend, Frontend, Qdrant, Redis) in detached mode:
 
 
+
 docker compose up -d --build
 Step 4: Verify Running Containers
 Check the status of your microservices:
